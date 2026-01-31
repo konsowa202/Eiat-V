@@ -1,0 +1,44 @@
+[
+    {
+        "id": "static-device-1",
+        "name": "جهاز ليزر كانديلا",
+        "category": "derma-laser",
+        "image": "/clinic-1.webp",
+        "description": "أحدث تقنية لإزالة الشعر بالليزر بفعالية وأمان تام."
+    },
+    {
+        "id": "static-device-2",
+        "name": "كرسي أسنان متطور",
+        "category": "dental",
+        "image": "/clinic-2.webp",
+        "description": "يوفر أقصى درجات الراحة للمريض أثناء العلاج."
+    },
+    {
+        "id": "static-device-3",
+        "name": "جهاز تعقيم",
+        "category": "dental",
+        "image": "/clinic-3.webp",
+        "description": "نظام تعقيم متكامل لضمان سلامة المرضى ومنع العدوى."
+    },
+    {
+        "id": "static-device-4",
+        "name": "جهاز فراكشنال ليزر",
+        "category": "derma-laser",
+        "image": "/clinic-4.webp",
+        "description": "علاج ندبات حب الشباب وتجاعيد الوجه وتجديد البشرة."
+    },
+    {
+        "id": "static-device-5",
+        "name": "جهاز أشعة بانوراما",
+        "category": "dental",
+        "image": "/clinic-5.webp",
+        "description": "تصوير فكي كامل لتشخيص دقيق وسريع."
+    },
+    {
+        "id": "static-device-6",
+        "name": "جهاز هيدرا فيشل",
+        "category": "derma-laser",
+        "image": "/clinic-6.webp",
+        "description": "تنظيف عميق وتغذية للبشرة لإشراقة فورية."
+    }
+]

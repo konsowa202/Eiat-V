@@ -1,0 +1,22 @@
+{
+  "name": "root",
+  "private": true,
+  "workspaces": [
+    "packages/eiat-site",
+    "packages/eiat-dashboard"
+  ],
+  "scripts": {
+    "dev": "lerna run dev --scope=eiat",
+    "build": "lerna run build --scope=eiat",
+    "start": "lerna run start --scope=eiat",
+    "dev:sanity": "lerna run dev --scope=eiat-sanity-studio",
+    "build:sanity": "lerna run build --scope=eiat-sanity-studio",
+    "start:sanity": "lerna run start --scope=eiat-sanity-studio"
+  },
+  "dependencies": {
+    "react-icons": "^5.5.0"
+  },
+  "devDependencies": {
+    "lerna": "^8.2.3"
+  }
+}

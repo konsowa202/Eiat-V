@@ -1,0 +1,104 @@
+﻿[
+    {
+        "id": "static-offer-1",
+        "image": "/offers/offer-1.jpg",
+        "originalName": "إزالة التاتو بالليزر وداعًا للتاتو غير المرغوب تقنية آمنة وفعّالة.jpg",
+        "category": "laser"
+    },
+    {
+        "id": "static-offer-2",
+        "image": "/offers/offer-2.jpg",
+        "originalName": "ابتسامة واثقة… وأكل مريح… وحياة أسهل زراعة الأسنان.jpg",
+        "category": "dental"
+    },
+    {
+        "id": "static-offer-3",
+        "image": "/offers/offer-3.jpg",
+        "originalName": "الابتسامة الواثقة تبدأ بخطوة تقويم الأسنان.jpg",
+        "category": "dental"
+    },
+    {
+        "id": "static-offer-4",
+        "image": "/offers/offer-4.jpg",
+        "originalName": "الديرما بن خيار مثالي لتحسين مظهر البشرة.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-5",
+        "image": "/offers/offer-5.jpg",
+        "originalName": "بشرتك ما تحتاج مكياج…تحتاج نضارة حقيقية.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-6",
+        "image": "/offers/offer-6.jpg",
+        "originalName": "تبييض الأسنان ابتسامة أنصع ولمعة طبيعية.jpg",
+        "category": "dental"
+    },
+    {
+        "id": "static-offer-7",
+        "image": "/offers/offer-7.jpg",
+        "originalName": "جلسة بلازما للوجه والشعر.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-8",
+        "image": "/offers/offer-8.jpg",
+        "originalName": "تلبيسة زيركون ابتسامة طبيعية.jpg",
+        "category": "dental"
+    },
+    {
+        "id": "static-offer-9",
+        "image": "/offers/offer-9.jpg",
+        "originalName": "تنظيف الأسنان ابتسامة أنظف وصحة أفضل.jpg",
+        "category": "dental"
+    },
+    {
+        "id": "static-offer-10",
+        "image": "/offers/offer-10.jpg",
+        "originalName": "جلسات البلازما للوجه والشعر.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-11",
+        "image": "/offers/offer-11.jpg",
+        "originalName": "جلسة تنظيف عميق للبشرة.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-12",
+        "image": "/offers/offer-12.jpg",
+        "originalName": "حقن البوتكس لإطلالة أكثر شبابًا.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-13",
+        "image": "/offers/offer-13.jpg",
+        "originalName": "تشقير الوجه والحواجب.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-14",
+        "image": "/offers/offer-14.jpg",
+        "originalName": "حقن فيلر الشفايف لمسة بسيطة.jpg",
+        "category": "dermatology"
+    },
+    {
+        "id": "static-offer-15",
+        "image": "/offers/offer-15.jpg",
+        "originalName": "نعومة تدوم ليزر جسم كامل.jpg",
+        "category": "laser"
+    },
+    {
+        "id": "static-offer-16",
+        "image": "/offers/offer-16.jpg",
+        "originalName": "نعومة من الرأس للقدم ليزر جسم كامل.jpg",
+        "category": "laser"
+    },
+    {
+        "id": "static-offer-17",
+        "image": "/offers/offer-17.jpg",
+        "originalName": "لأن جمالك يستاهل عروض الليزر.jpg",
+        "category": "laser"
+    }
+]
