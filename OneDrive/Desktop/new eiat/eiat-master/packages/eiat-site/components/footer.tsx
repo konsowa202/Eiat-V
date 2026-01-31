@@ -5,6 +5,7 @@ import Image from "next/image";
 import { TextAnimate } from "./magicui/text-animate";
 import Link from "next/link";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
+import { FaInstagram, FaSnapchatGhost } from "react-icons/fa";
 
 /**
  * Footer component for the Ayat Dental website.
@@ -102,6 +103,25 @@ const Footer = () => {
                 )}
               </div>
             </Link>
+            {/* Social Icons */}
+            <div className="flex items-center gap-4 pt-2">
+              <Link
+                href="https://www.instagram.com/eiat.clinics?igsh=MWhpNGxtYTg3aWlnOQ=="
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-pink-600 transition-colors"
+              >
+                <FaInstagram size={24} />
+              </Link>
+              <Link
+                href="https://snapchat.com/t/AVfd6UWc"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-yellow-500 transition-colors"
+              >
+                <FaSnapchatGhost size={24} />
+              </Link>
+            </div>
           </div>
 
           {/* Simple Link Section */}

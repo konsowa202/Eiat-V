@@ -6,12 +6,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { urlFor } from "@/lib/sanityImage";
 import { Skeleton } from "@/components/ui/skeleton"; // make sure this exists in your UI lib
 import Link from "next/link";
+import { useState } from "react";
+import { usePathname } from "next/navigation";
 
 /**
  * DoctorCard component displays detailed information about a medical professional
  * including their photo, name, experience, location, and availability.
  */
 const DoctorCard = ({ doctor }: { doctor: Doctor }) => {
+  const pathname = usePathname();
+  const [isExpanded, setIsExpanded] = useState(false);
   const initials = doctor.name
     .split(/\s+/)
     .filter(Boolean)
@@ -23,8 +27,13 @@ const DoctorCard = ({ doctor }: { doctor: Doctor }) => {
     ? urlFor(doctor.image.asset._ref).width(500).height(500).url()
     : "/placeholder.svg?height=112&width=112";
 
+  const isDoctorsPage = pathname === "/doctors";
+
   return (
-    <Card className="w-full max-w-md mx-auto bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group overflow-hidden relative">
+    <Card
+      id={`doctor-${doctor._id}`}
+      className="w-full max-w-md mx-auto bg-gradient-to-br from-blue-50 via-white to-indigo-50 border border-blue-200/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group overflow-hidden relative"
+    >
       {/* Decorative background pattern */}
       <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-100/30 to-transparent rounded-full -translate-y-16 -translate-x-16" />
       <div className="absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-tl from-indigo-100/30 to-transparent rounded-full translate-y-12 translate-x-12" />
@@ -74,12 +83,36 @@ const DoctorCard = ({ doctor }: { doctor: Doctor }) => {
         <div className="space-y-4">
           {doctor.about && (
             <div className="p-3 bg-white/60 rounded-lg border border-blue-100/50 hover:bg-white/80 transition-colors">
-              <p className="text-gray-700 font-medium text-sm line-clamp-3 overflow-hidden text-ellipsis display-webkit-box -webkit-line-clamp-3 -webkit-box-orient-vertical">
+              <p
+                className={`text-gray-700 font-medium text-sm overflow-hidden text-ellipsis ${isExpanded || !isDoctorsPage ? "" : "line-clamp-3"
+                  } ${!isExpanded && !isDoctorsPage ? "line-clamp-3" : ""}`}
+                style={
+                  isExpanded
+                    ? {}
+                    : {
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                    }
+                }
+              >
                 {doctor.about}
               </p>
-              <Link href={`/doctors#doctor-${doctor._id}`} className="text-xs text-primary mt-1 inline-block hover:underline">
-                عرض المزيد
-              </Link>
+              {isDoctorsPage ? (
+                <button
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-xs text-primary mt-1 inline-block hover:underline focus:outline-none cursor-pointer"
+                >
+                  {isExpanded ? "عرض أقل" : "عرض المزيد"}
+                </button>
+              ) : (
+                <Link
+                  href={`/doctors#doctor-${doctor._id}`}
+                  className="text-xs text-primary mt-1 inline-block hover:underline"
+                >
+                  عرض المزيد
+                </Link>
+              )}
             </div>
           )}
           {doctor.availability && doctor.availability.length > 0 && (
@@ -119,7 +152,8 @@ const DoctorCard = ({ doctor }: { doctor: Doctor }) => {
 
         <div className="pt-2">
           <Link
-            href={`/?doctor=${encodeURIComponent(doctor.name)}&department=${doctor.department || 'dental'}#booking`}
+            href={`/?doctor=${encodeURIComponent(doctor.name)}&department=${doctor.department || "dental"
+              }#booking`}
             className="block w-full text-center py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors font-semibold shadow-md active:scale-95 duration-200"
           >
             احجز موعد

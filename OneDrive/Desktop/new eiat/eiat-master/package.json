@@ -6,12 +6,12 @@
     "packages/eiat-dashboard"
   ],
   "scripts": {
-    "dev": "lerna run dev --scope=eiat",
-    "build": "lerna run build --scope=eiat",
-    "start": "lerna run start --scope=eiat",
-    "dev:sanity": "lerna run dev --scope=eiat-sanity-studio",
-    "build:sanity": "lerna run build --scope=eiat-sanity-studio",
-    "start:sanity": "lerna run start --scope=eiat-sanity-studio"
+    "dev": "pnpm --filter eiat dev",
+    "build": "pnpm --filter eiat build",
+    "start": "pnpm --filter eiat start",
+    "dev:sanity": "pnpm --filter eiat-sanity-studio dev",
+    "build:sanity": "pnpm --filter eiat-sanity-studio build",
+    "start:sanity": "pnpm --filter eiat-sanity-studio start"
   },
   "dependencies": {
     "react-icons": "^5.5.0"

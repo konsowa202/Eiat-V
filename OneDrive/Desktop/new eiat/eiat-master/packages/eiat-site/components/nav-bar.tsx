@@ -6,6 +6,7 @@ import { useState } from "react";
 import { AnimatePresence, motion, Variants } from "motion/react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { FaInstagram, FaSnapchatGhost } from "react-icons/fa";
 
 /**
  * Responsive navigation bar component with animated mobile menu
@@ -108,6 +109,7 @@ export default function Navbar() {
         type: "spring",
         stiffness: 300,
         damping: 25,
+        delay: 0.1,
       },
     },
   };
@@ -171,6 +173,25 @@ export default function Navbar() {
               </motion.div>
             </motion.div>
           ))}
+          {/* Social Icons Desktop */}
+          <div className="flex items-center gap-2">
+            <Link
+              href="https://www.instagram.com/eiat.clinics?igsh=MWhpNGxtYTg3aWlnOQ=="
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-600 hover:text-pink-600 transition-colors"
+            >
+              <FaInstagram size={20} />
+            </Link>
+            <Link
+              href="https://snapchat.com/t/AVfd6UWc"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-600 hover:text-yellow-500 transition-colors"
+            >
+              <FaSnapchatGhost size={20} />
+            </Link>
+          </div>
           {/* Language Switcher Desktop */}
           <Button
             variant="ghost"
@@ -233,6 +254,30 @@ export default function Navbar() {
                     </Link>
                   </motion.div>
                 ))}
+                {/* Social Icons Mobile */}
+                <motion.div
+                  variants={itemVariants}
+                  className="flex items-center gap-4 px-3 py-2"
+                >
+                  <Link
+                    href="https://www.instagram.com/eiat.clinics?igsh=MWhpNGxtYTg3aWlnOQ=="
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-600 hover:text-pink-600 transition-colors flex items-center gap-2"
+                  >
+                    <FaInstagram size={24} />
+                    <span>انستجرام</span>
+                  </Link>
+                  <Link
+                    href="https://snapchat.com/t/AVfd6UWc"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-600 hover:text-yellow-500 transition-colors flex items-center gap-2"
+                  >
+                    <FaSnapchatGhost size={24} />
+                    <span>سناب شات</span>
+                  </Link>
+                </motion.div>
                 <motion.div variants={itemVariants}>
                   <Button
                     variant="ghost"
