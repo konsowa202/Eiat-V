@@ -37,9 +37,42 @@ async function getOffers() {
   return await sanity.fetch(query);
 }
 
+async function getTestimonials() {
+  const query = `*[_type == "testimonial"] {
+    _id,
+    name,
+    age,
+    treatment,
+    rating,
+    date,
+    location,
+    image,
+    quote,
+    beforeImage,
+    afterImage,
+    featured,
+  }`;
+  return await sanity.fetch(query);
+}
+
+async function getDoctors() {
+  // Fetch full doctor objects for the section and booking
+  const query = `*[_type == "doctor"]{
+    _id,
+    name,
+    image,
+    department,
+    about,
+    category
+  }`;
+  return await sanity.fetch(query);
+}
+
 export default async function Home() {
   const devices = await getDevices();
   const offers = await getOffers();
+  const testimonials = await getTestimonials();
+  const doctors = await getDoctors();
   return (
     <main className="min-h-[100dvh] flex flex-col space-y-20 lg:space-y-40 overflow-clip relative">
       {/* Hero Section */}
@@ -120,13 +153,13 @@ export default async function Home() {
       <GallerySection devices={devices} />
 
       {/* Testimonials */}
-      <FeaturedSuccessStories />
+      <FeaturedSuccessStories testimonials={testimonials} />
 
       {/* Doctors */}
-      <DoctorsSection />
+      <DoctorsSection explicitDoctors={doctors} />
 
       {/* Booking */}
-      <BookingSection />
+      <BookingSection doctors={doctors} />
     </main>
   );
 }

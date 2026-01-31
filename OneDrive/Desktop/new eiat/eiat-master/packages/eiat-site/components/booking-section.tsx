@@ -63,7 +63,11 @@ const DEPARTMENTS = [
 // Booking Section Component
 // ==============================
 
-const BookingSection = () => {
+interface BookingSectionProps {
+  doctors?: Doctor[];
+}
+
+const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
   const {
     register,
     handleSubmit,
@@ -75,9 +79,12 @@ const BookingSection = () => {
     resolver: zodResolver(BookingSchema),
   });
 
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  // setDoctors is no longer needed as we use props
+  // We keep filteredDoctors state
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Initialize doctors list if needed, but since it's passed as prop, we can just use it directly
+  // However, we need to handle the filtering logic.
 
   // Read URL params
   const searchParams = useSearchParams();
@@ -85,24 +92,8 @@ const BookingSection = () => {
   const paramDepartment = searchParams.get("department"); // dental, dermatology, laser
   const paramOffer = searchParams.get("offer");
 
-  // Fetch available doctors
-  useEffect(() => {
-    const fetchDoctors = async () => {
-      try {
-        const query = groq`*[_type == "doctor"]{name, department}`;
-        const data = await sanity.fetch(query);
-        setDoctors(data);
+  // No fetchDoctors useEffect anymore
 
-        // Initial filter will happen in the effect below
-      } catch (error) {
-        console.error("Error fetching doctors:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchDoctors();
-  }, []);
 
   // Handle URL Params & Initial State
   useEffect(() => {
@@ -353,7 +344,7 @@ const BookingSection = () => {
                         <SelectValue placeholder="اختر الطبيب المناسب" />
                       </SelectTrigger>
                       <SelectContent>
-                        {isLoading ? (
+                        {doctors.length === 0 ? (
                           <div className="px-3 py-2 text-gray-500 text-right">
                             جاري التحميل...
                           </div>

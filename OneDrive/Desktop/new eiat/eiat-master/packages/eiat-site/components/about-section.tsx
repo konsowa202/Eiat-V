@@ -3,6 +3,7 @@ import React from "react";
 import { TextAnimate } from "./magicui/text-animate";
 import { BlurFade } from "./magicui/blur-fade";
 import Image from "next/image";
+import ImageWithSkeleton from "./image-with-skeleton";
 import { CheckCircle2 } from "lucide-react";
 
 const qualifications = [
@@ -60,11 +61,12 @@ const AboutSection = () => {
             <div className="relative">
               <div className="absolute -inset-4 bg-primary/10 rounded-[2.5rem] transform -rotate-3" />
               <div className="relative h-[400px] sm:h-[500px] rounded-[2rem] overflow-hidden shadow-2xl border-8 border-white">
-                <Image
+                <ImageWithSkeleton
                   src="/about-new.png"
                   alt="فريق إيات الطبي"
                   fill
                   className="object-cover"
+                  skeletonClassName="bg-gray-200"
                 />
               </div>
               {/* Experience Badge */}

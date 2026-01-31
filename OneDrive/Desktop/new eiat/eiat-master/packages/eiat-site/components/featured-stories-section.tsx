@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay } from "swiper/modules";
@@ -8,11 +7,7 @@ import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
 
-import groq from "groq";
-import { sanity } from "@/lib/sanity";
-import PatientStoryCard, {
-  BeforeAfterTestimonialSkeleton,
-} from "./patient-story-card";
+import PatientStoryCard from "./patient-story-card";
 import { TextAnimate } from "./magicui/text-animate";
 import { useHomepageSections } from "@/hooks/useHomepageSections";
 
@@ -31,42 +26,14 @@ import { useHomepageSections } from "@/hooks/useHomepageSections";
  *
  * @returns {JSX.Element} A section containing featured patient success stories
  */
-export default function FeaturedSuccessStories() {
-  // State for storing testimonials data and loading state
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function FeaturedSuccessStories({
+  testimonials,
+}: {
+  testimonials: Testimonial[];
+}) {
   const { sections, error } = useHomepageSections();
 
-  // Fetch testimonials on component mount
-  useEffect(() => {
-    async function fetchTestimonials() {
-      try {
-        const query = groq`*[_type == "testimonial"] {
-          _id,
-          name,
-          age,
-          treatment,
-          rating,
-          date,
-          location,
-          image,
-          quote,
-          beforeImage,
-          afterImage,
-          featured,
-        }`;
-        const content = await sanity.fetch(query);
-        setTestimonials(content);
-      } catch (error) {
-        console.error("Error fetching testimonials:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchTestimonials();
-  }, []);
-  if (testimonials.length === 0) {
+  if (!testimonials || testimonials.length === 0) {
     return null;
   }
 
@@ -163,19 +130,13 @@ export default function FeaturedSuccessStories() {
           }}
           className="w-full !overflow-visible"
         >
-          {loading
-            ? [...Array(3)].map((_, idx) => (
-                <SwiperSlide key={idx}>
-                  <BeforeAfterTestimonialSkeleton />
-                </SwiperSlide>
-              ))
-            : testimonials
-                .slice(0, 6) // show more if needed
-                .map((testimonial) => (
-                  <SwiperSlide key={testimonial._id}>
-                    <PatientStoryCard testimonial={testimonial} />
-                  </SwiperSlide>
-                ))}
+          {testimonials
+            .slice(0, 6) // show more if needed
+            .map((testimonial) => (
+              <SwiperSlide key={testimonial._id}>
+                <PatientStoryCard testimonial={testimonial} />
+              </SwiperSlide>
+            ))}
         </Swiper>
 
         {/* CTA */}

@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import Image from "next/image";
+import ImageWithSkeleton from "./image-with-skeleton";
 
 export default function HeroImage() {
     return (
@@ -52,12 +53,13 @@ export default function HeroImage() {
 
                     {/* The Image */}
                     <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-white/80 shadow-2xl bg-gradient-to-b from-transparent to-primary/5">
-                        <Image
+                        <ImageWithSkeleton
                             src="/hero-doctor-new.png"
                             alt="طاقم إيات الطبي"
                             width={600}
                             height={700}
                             className="object-cover max-h-[500px] lg:max-h-[600px] w-auto"
+                            skeletonClassName="bg-gray-100"
                             priority
                         />
                     </div>

@@ -15,6 +15,7 @@ import { Badge } from "./ui/badge";
 import { urlFor } from "@/lib/sanityImage";
 import { Skeleton } from "./ui/skeleton";
 import Image from "next/image";
+import ImageWithSkeleton from "./image-with-skeleton";
 
 interface Testimonial {
   image?: { asset: { _ref: string } };
@@ -47,27 +48,27 @@ const PatientStoryCard = ({ testimonial }: { testimonial: Testimonial }) => {
     <Card className="overflow-hidden shadow-xl border-0">
       <div className="relative">
         <div className="grid grid-cols-2 gap-1">
-          <div className="relative">
-            <Image
+          <div className="relative h-48 w-full">
+            <ImageWithSkeleton
               src={beforeImage}
-              width={800}
-              height={800}
               alt="قبل العلاج"
-              className="w-full h-48 object-cover"
+              fill
+              className="object-cover"
+              skeletonClassName="h-full bg-gray-200"
             />
-            <div className="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+            <div className="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20">
               قبل
             </div>
           </div>
-          <div className="relative">
-            <Image
+          <div className="relative h-48 w-full">
+            <ImageWithSkeleton
               src={afterImage}
-              width={800}
-              height={800}
               alt="بعد العلاج"
-              className="w-full h-48 object-cover"
+              fill
+              className="object-cover"
+              skeletonClassName="h-full bg-gray-200"
             />
-            <div className="absolute bottom-2 left-2 bg-subtitle text-white px-2 py-1 rounded text-xs">
+            <div className="absolute bottom-2 left-2 bg-subtitle text-white px-2 py-1 rounded text-xs z-20">
               بعد
             </div>
           </div>
@@ -109,11 +110,10 @@ const PatientStoryCard = ({ testimonial }: { testimonial: Testimonial }) => {
               {[...Array(5)].map((_, i) => (
                 <Star
                   key={i}
-                  className={`w-4 h-4 transition-colors ${
-                    i < testimonial.rating
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "fill-gray-200 text-gray-200"
-                  }`}
+                  className={`w-4 h-4 transition-colors ${i < testimonial.rating
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "fill-gray-200 text-gray-200"
+                    }`}
                 />
               ))}
               <span className="text-sm text-gray-500 ml-1">

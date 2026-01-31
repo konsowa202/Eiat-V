@@ -3,6 +3,7 @@ import React from "react";
 import { BlurFade } from "./magicui/blur-fade";
 import { TextAnimate } from "./magicui/text-animate";
 import Image from "next/image";
+import ImageWithSkeleton from "./image-with-skeleton";
 import { useHomepageSections } from "@/hooks/useHomepageSections";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -69,11 +70,12 @@ const GallerySection = ({ devices = [] }: GallerySectionProps) => {
                 <Card className="group overflow-hidden border-2 border-gray-100 hover:border-primary/50 transition-all duration-300 hover:shadow-xl bg-white h-full flex flex-col">
                   <div className="relative h-64 overflow-hidden bg-gray-50">
                     {device.image ? (
-                      <Image
+                      <ImageWithSkeleton
                         src={typeof device.image === 'string' ? device.image : urlFor(device.image).url()}
                         alt={device.name}
                         fill
                         className="object-cover group-hover:scale-110 transition-transform duration-700"
+                        skeletonClassName="bg-gray-200"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-300">
