@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "motion/react";
-import Image from "next/image";
 import ImageWithSkeleton from "./image-with-skeleton";
 
 export default function HeroImage() {

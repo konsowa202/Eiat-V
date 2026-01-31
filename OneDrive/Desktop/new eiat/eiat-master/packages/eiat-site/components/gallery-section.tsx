@@ -2,7 +2,6 @@
 import React from "react";
 import { BlurFade } from "./magicui/blur-fade";
 import { TextAnimate } from "./magicui/text-animate";
-import Image from "next/image";
 import ImageWithSkeleton from "./image-with-skeleton";
 import { useHomepageSections } from "@/hooks/useHomepageSections";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,7 +45,6 @@ const GallerySection = ({ devices = [] }: GallerySectionProps) => {
   if (error) {
     return <p className="text-red-500 text-sm">{error.message}</p>;
   }
-  const section = sections?.find((s) => s.sectionCategory === "معرض الصور"); // We can keep the section name internally or change it
 
   return (
     <BlurFade inView>

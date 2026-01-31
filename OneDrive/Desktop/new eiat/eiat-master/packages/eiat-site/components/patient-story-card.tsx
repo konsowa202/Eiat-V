@@ -14,7 +14,6 @@ import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { urlFor } from "@/lib/sanityImage";
 import { Skeleton } from "./ui/skeleton";
-import Image from "next/image";
 import ImageWithSkeleton from "./image-with-skeleton";
 
 interface Testimonial {

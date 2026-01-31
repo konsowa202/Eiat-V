@@ -37,7 +37,7 @@ export default function OffersView({ offers }: OffersViewProps) {
     // Merge Sanity offers with static offers
     const allOffers: Offer[] = [
         ...offers,
-        ...staticOffersData.map((offer: any) => ({
+        ...staticOffersData.map((offer: { id: string; originalName: string; image: string; category: string }) => ({
             _id: offer.id,
             title: offer.originalName.split(".")[0], // Use filename as title approximation
             description: "", // Description implicit in image
@@ -73,7 +73,7 @@ export default function OffersView({ offers }: OffersViewProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredOffers.map((offer, index) => (
+                {filteredOffers.map((offer) => (
                     <motion.div
                         layout
                         initial={{ opacity: 0, scale: 0.9 }}
