@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  eiat-site:
+    build:
+      context: ./packages/eiat-site
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - SANITY_TOKEN=${SANITY_TOKEN}
+    restart: unless-stopped
+    volumes:
+      - ./packages/eiat-site/.env:/app/.env:ro
+    networks:
+      - eiat-network
+
+networks:
+  eiat-network:
+    driver: bridge
+

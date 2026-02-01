@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploy script for Eiat website on VPS
+# Simple deployment script for Eiat website on VPS (without Docker)
 
 echo "🚀 Starting deployment..."
 
@@ -25,18 +25,10 @@ if ! command -v pnpm &> /dev/null; then
     npm install -g pnpm
 fi
 
-# Install Docker
-if ! command -v docker &> /dev/null; then
-    echo "🐳 Installing Docker..."
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    rm get-docker.sh
-fi
-
-# Install Docker Compose
-if ! command -v docker-compose &> /dev/null; then
-    echo "🐳 Installing Docker Compose..."
-    apt install -y docker-compose
+# Install PM2
+if ! command -v pm2 &> /dev/null; then
+    echo "📦 Installing PM2..."
+    npm install -g pm2
 fi
 
 # Clone or update repository
@@ -52,25 +44,33 @@ else
     cd eiat
 fi
 
-# Create .env file if it doesn't exist
-if [ ! -f "packages/eiat-site/.env" ]; then
-    echo "📝 Creating .env file..."
-    cat > packages/eiat-site/.env << EOF
+# Create .env file
+echo "📝 Creating .env file..."
+cat > packages/eiat-site/.env << EOF
 SANITY_TOKEN=sklM1PFIoMYkoolRlynCkgNgOp1YTF2OGOBRL0P1mKieYiHCfNNTRc7fL13NufBospyOWiCMtjspAHA9P5WE2ca8TMd6egKx4nzW71HrS3Tau73ks81gQJlD3WFb2bqCJ5TsEgXUQAOvOpcnu95HjyeD1qUbR43GMY4m3QaraNIQYpLn3kWT
 NODE_ENV=production
 EOF
-fi
 
-# Build and start with Docker Compose
-echo "🏗️ Building and starting containers..."
+# Install dependencies
+echo "📦 Installing dependencies..."
 cd /var/www/eiat
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+pnpm install
 
-# Wait for application to start
-echo "⏳ Waiting for application to start..."
-sleep 10
+# Build the application
+echo "🏗️ Building application..."
+cd /var/www/eiat
+pnpm build
+
+# Stop existing PM2 process if running
+pm2 stop eiat-site 2>/dev/null || true
+pm2 delete eiat-site 2>/dev/null || true
+
+# Start application with PM2
+echo "🚀 Starting application..."
+cd /var/www/eiat/packages/eiat-site
+pm2 start npm --name "eiat-site" -- start
+pm2 save
+pm2 startup
 
 # Configure Nginx
 echo "🌐 Configuring Nginx..."
@@ -102,8 +102,10 @@ nginx -t && systemctl reload nginx
 
 # Setup SSL with Let's Encrypt
 echo "🔒 Setting up SSL certificate..."
-certbot --nginx -d eiatclinics.com -d www.eiatclinics.com --non-interactive --agree-tos --email eiatclinicad@gmail.com
+certbot --nginx -d eiatclinics.com -d www.eiatclinics.com --non-interactive --agree-tos --email eiatclinicad@gmail.com || echo "SSL setup skipped (may need manual setup)"
 
 echo "✅ Deployment completed!"
 echo "🌐 Your site should be available at: https://eiatclinics.com"
+echo "📊 Check PM2 status: pm2 status"
+echo "📋 View logs: pm2 logs eiat-site"
 
