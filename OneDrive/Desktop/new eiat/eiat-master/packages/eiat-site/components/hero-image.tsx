@@ -24,7 +24,7 @@ export default function HeroImage() {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
+                transition={{ duration: 0.2 }} // Sped up from 0.8
                 className="relative z-10 w-fit"
             >
                 {/* Decorative Ring 1 */}
@@ -51,7 +51,7 @@ export default function HeroImage() {
                     <div className="absolute inset-4 bg-white/30 backdrop-blur-sm rounded-[3rem] -z-10 border border-white/50 shadow-lg transform rotate-6 scale-105" />
 
                     {/* The Image */}
-                    <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-white/80 shadow-2xl bg-gradient-to-b from-transparent to-primary/5">
+                    <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-white/80 shadow-2xl bg-transparent">
                         <ImageWithSkeleton
                             src="/hero-doctor-new.png"
                             alt="طاقم إيات الطبي"

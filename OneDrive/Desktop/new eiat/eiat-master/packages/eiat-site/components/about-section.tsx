@@ -13,7 +13,13 @@ const qualifications = [
   "رعاية متكاملة تضمن لك أعلى معايير الجودة والأمان"
 ];
 
-const AboutSection = () => {
+interface AboutSectionProps {
+  title?: string;
+  subtitle?: string;
+  description?: string;
+}
+
+const AboutSection = ({ title, subtitle, description }: AboutSectionProps) => {
   return (
     <section id="about" className="py-24 relative overflow-hidden bg-white">
       <div className="container mx-auto px-4 relative z-10">
@@ -22,11 +28,15 @@ const AboutSection = () => {
           <div className="w-full lg:w-1/2 space-y-8 text-right">
             <div className="space-y-4">
               <TextAnimate className="text-primary font-bold tracking-wider text-xl" animation="blurInUp">
-                من نحن
+                {title || "من نحن"}
               </TextAnimate>
               <h2 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-                مجمع عيادات <span className="text-primary">إيات الطبي</span> <br />
-                رعاية بمعايير عالمية
+                {subtitle || (
+                  <>
+                    مجمع عيادات <span className="text-primary">إيات الطبي</span> <br />
+                    رعاية بمعايير عالمية
+                  </>
+                )}
               </h2>
             </div>
 
@@ -45,7 +55,7 @@ const AboutSection = () => {
             {/* Description Section (Placed UNDER Qualifications as requested) */}
             <div className="pt-4">
               <p className="text-lg text-gray-600 leading-relaxed font-medium">
-                نحن في مجمع عيادات إيات الطبي نلتزم بتقديم أرقى مستويات الرعاية المتكاملة، حيث نجمع بين الخبرة الطبية العريقة وأحدث ما توصلت إليه التكنولوجيا في مجالات طب الأسنان، الجلدية، والتجميل، والليزر. نسعى دائماً لتوفير تجربة علاجية استثنائية ترتكز على الجودة والراحة والأمان لكل مراجع لبناء علاقة ثقة مستدامة.
+                {description || "نحن في مجمع عيادات إيات الطبي نلتزم بتقديم أرقى مستويات الرعاية المتكاملة، حيث نجمع بين الخبرة الطبية العريقة وأحدث ما توصلت إليه التكنولوجيا في مجالات طب الأسنان، الجلدية، والتجميل، والليزر. نسعى دائماً لتوفير تجربة علاجية استثنائية ترتكز على الجودة والراحة والأمان لكل مراجع لبناء علاقة ثقة مستدامة."}
               </p>
             </div>
 
@@ -57,7 +67,7 @@ const AboutSection = () => {
           </div>
 
           {/* Image Column */}
-          <BlurFade className="w-full lg:w-1/2" direction="left" inView>
+          <BlurFade className="w-full lg:w-1/2" direction="left" inView duration={0}>
             <div className="relative">
               <div className="absolute -inset-4 bg-primary/10 rounded-[2.5rem] transform -rotate-3" />
               <div className="relative h-[400px] sm:h-[500px] rounded-[2rem] overflow-hidden shadow-2xl border-8 border-white">

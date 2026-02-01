@@ -28,15 +28,14 @@ export default function ImageWithSkeleton({
         >
             <Skeleton
                 className={cn(
-                    "absolute inset-0 w-full h-full z-10 transition-opacity duration-300",
+                    "absolute inset-0 w-full h-full z-10",
                     skeletonClassName,
-                    isLoading ? "opacity-100" : "opacity-0 pointer-events-none"
+                    isLoading ? "block" : "hidden"
                 )}
             />
             <Image
                 className={cn(
-                    "transition-opacity duration-300",
-                    isLoading ? "opacity-0" : "opacity-100",
+                    isLoading ? "invisible" : "visible",
                     className
                 )}
                 alt={alt}

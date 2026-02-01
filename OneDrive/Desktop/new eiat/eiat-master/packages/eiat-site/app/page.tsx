@@ -68,11 +68,21 @@ async function getDoctors() {
   return await sanity.fetch(query);
 }
 
+async function getAbout() {
+  const query = `*[_type == "homepage" && sectionCategory == "نبذة عنا"][0]{
+    sectionTitle,
+    sectionSubtitle,
+    sectionDesc
+  }`;
+  return await sanity.fetch(query);
+}
+
 export default async function Home() {
   const devices = await getDevices();
   const offers = await getOffers();
   const testimonials = await getTestimonials();
   const doctors = await getDoctors();
+  const aboutData = await getAbout();
   return (
     <main className="min-h-[100dvh] flex flex-col space-y-20 lg:space-y-40 overflow-clip relative">
       {/* Hero Section */}
@@ -135,7 +145,11 @@ export default async function Home() {
       </BlurFade>
 
       {/* About Section */}
-      <AboutSection />
+      <AboutSection
+        title={aboutData?.sectionTitle}
+        subtitle={aboutData?.sectionSubtitle}
+        description={aboutData?.sectionDesc}
+      />
 
       {/* Dental Services */}
       <BlurFade>
