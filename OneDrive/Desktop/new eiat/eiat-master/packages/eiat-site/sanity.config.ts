@@ -2,7 +2,6 @@
 
 import { defineConfig } from "sanity";
 import { deskTool } from "sanity/desk";
-import { visionTool } from "@sanity/vision";
 import { schemaTypes } from "./schemaTypes";
 
 const projectId = "f46widyg";
@@ -16,7 +15,7 @@ export default defineConfig({
     projectId,
     dataset,
 
-    plugins: [deskTool(), visionTool()],
+    plugins: [deskTool()],
 
     schema: {
         types: schemaTypes,
