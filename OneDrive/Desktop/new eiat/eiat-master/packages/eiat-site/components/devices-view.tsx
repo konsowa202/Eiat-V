@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { urlFor } from "@/lib/sanityImage";
 import { SanityImageSource } from "@sanity/image-url/lib/types/types";
-import staticDevices from "@/lib/static-devices.json";
 
 interface Device {
     _id: string;

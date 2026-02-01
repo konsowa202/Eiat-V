@@ -23,8 +23,6 @@ import { BlurFade } from "./magicui/blur-fade";
 import { TextAnimate } from "./magicui/text-animate";
 import Image from "next/image";
 import { toast } from "sonner";
-import { sanity } from "@/lib/sanity";
-import groq from "groq";
 import { useHomepageSections } from "@/hooks/useHomepageSections";
 
 // ==============================
@@ -116,8 +114,12 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
   }, [paramDepartment, paramDoctor, paramOffer, setValue, doctors]);
 
 
+  const { sections, error } = useHomepageSections();
+
   // Filter doctors when department changes
   const selectedDepartment = useWatch({ control, name: "department" });
+  const selectedDoctor = useWatch({ control, name: "doctor" });
+  
   useEffect(() => {
     if (selectedDepartment) {
       setFilteredDoctors(doctors.filter(d => (d.department || 'dental') === selectedDepartment));
@@ -125,7 +127,6 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
       setFilteredDoctors(doctors);
     }
   }, [selectedDepartment, doctors]);
-  const { sections, error } = useHomepageSections();
 
   // Handle form submission
   const onSubmit = async (data: BookingData) => {
@@ -300,7 +301,7 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
                     <Select onValueChange={(val) => {
                       setValue("department", val);
                       setValue("doctor", ""); // Reset doctor when department changes
-                    }} value={useWatch({ control, name: "department" })}>
+                    }} value={selectedDepartment}>
                       <SelectTrigger className="bg-gray-50 border-gray-200 h-12 rounded-xl text-right">
                         <SelectValue placeholder="اختار العيادة" />
                       </SelectTrigger>
@@ -339,7 +340,7 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
                   {/* Doctor Dropdown */}
                   <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="doctor" className="text-gray-700 font-semibold">الطبيب المعالج (اختياري)</Label>
-                    <Select onValueChange={(val) => setValue("doctor", val)} value={useWatch({ control, name: "doctor" })}>
+                    <Select onValueChange={(val) => setValue("doctor", val)} value={selectedDoctor}>
                       <SelectTrigger className="bg-gray-50 border-gray-200 h-12 rounded-xl text-right">
                         <SelectValue placeholder="اختر الطبيب المناسب" />
                       </SelectTrigger>

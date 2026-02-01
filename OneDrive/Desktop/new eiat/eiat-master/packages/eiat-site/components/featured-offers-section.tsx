@@ -5,13 +5,14 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/navigation";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { TextAnimate } from "./magicui/text-animate";
 import { cn } from "@/lib/utils";
 import { urlFor } from "@/lib/sanityImage";
+import { SanityImageSource } from "@sanity/image-url/lib/types/types";
 // import staticOffersData from "@/lib/static-offers.json"; // Deprecated
 
 const TABS = [
@@ -21,7 +22,17 @@ const TABS = [
     { id: "laser", label: "الليزر" },
 ];
 
-export default function FeaturedOffersSection({ offers = [] }: { offers?: any[] }) {
+interface Offer {
+    _id: string;
+    title: string;
+    description?: string;
+    department?: string;
+    category?: string;
+    image?: SanityImageSource | string;
+    discount?: string;
+}
+
+export default function FeaturedOffersSection({ offers = [] }: { offers?: Offer[] }) {
     const [activeTab, setActiveTab] = useState("all");
 
     // Use passed offers or empty array. Static fallback removed to encourage Sanity usage,

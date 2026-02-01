@@ -1,4 +1,3 @@
-import Image from "next/image";
 import CTA from "@/components/CTA";
 import MedicalDepartments from "@/components/services";
 import DoctorsSection from "@/components/doctors-section";

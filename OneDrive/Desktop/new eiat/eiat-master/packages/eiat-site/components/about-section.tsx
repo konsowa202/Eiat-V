@@ -2,7 +2,6 @@
 import React from "react";
 import { TextAnimate } from "./magicui/text-animate";
 import { BlurFade } from "./magicui/blur-fade";
-import Image from "next/image";
 import ImageWithSkeleton from "./image-with-skeleton";
 import { CheckCircle2 } from "lucide-react";
 

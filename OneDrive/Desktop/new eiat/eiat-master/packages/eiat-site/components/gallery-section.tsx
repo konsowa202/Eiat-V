@@ -23,7 +23,7 @@ interface GallerySectionProps {
 }
 
 const GallerySection = ({ devices = [] }: GallerySectionProps) => {
-  const { sections, error } = useHomepageSections();
+  const { error } = useHomepageSections();
 
   // Merge Sanity devices with static devices (fallback or combined)
   // If we have Sanity devices, maybe we prioritize them, or show both?
