@@ -16,8 +16,12 @@ const cairo = Cairo({
 
 export const metadata: Metadata = {
   icons: {
-    icon: "/1.png",
+    icon: [
+      { url: "/logo.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
     apple: "/apple-touch-icon-180x180.png",
+    shortcut: "/logo.ico",
   },
   title: "EIAT Medical Clinics | مجمع عيادات إيات الطبي",
   description:
