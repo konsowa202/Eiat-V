@@ -44,7 +44,10 @@ export default function DoctorsSection({ explicitDoctors }: DoctorsSectionProps)
     const fetchDoctors = async () => {
       try {
         const query = groq`*[_type == "doctor"]{...}`;
-        const data = await sanity.fetch(query);
+        // Fetch fresh data without cache
+        const data = await sanity.fetch(query, {}, {
+          cache: 'no-store' // Always fetch fresh data
+        });
         setDoctors(data);
       } catch (error) {
         console.error("Error fetching doctors:", error);
@@ -54,6 +57,11 @@ export default function DoctorsSection({ explicitDoctors }: DoctorsSectionProps)
     };
 
     fetchDoctors();
+    
+    // Refetch every 30 seconds to get latest updates
+    const interval = setInterval(fetchDoctors, 30000);
+    
+    return () => clearInterval(interval);
   }, [explicitDoctors]);
 
   if (!doctors || doctors.length === 0) {

@@ -33,7 +33,10 @@ export function useClinicInfo() {
         
         }`;
 
-        const data = await sanity.fetch<ClinicInfo>(query);
+        // Fetch fresh data without cache
+        const data = await sanity.fetch<ClinicInfo>(query, {}, {
+          cache: 'no-store' // Always fetch fresh data
+        });
         setClinicInfo(data);
       } catch (err) {
         console.error("Error fetching clinic info:", err);
@@ -44,6 +47,11 @@ export function useClinicInfo() {
     };
 
     fetchClinicInfo();
+    
+    // Refetch every 30 seconds to get latest updates
+    const interval = setInterval(fetchClinicInfo, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   return { clinicInfo, isLoading, error };

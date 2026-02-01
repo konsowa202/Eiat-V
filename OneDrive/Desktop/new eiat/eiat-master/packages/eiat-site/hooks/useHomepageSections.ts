@@ -32,7 +32,10 @@ export function useHomepageSections() {
           sectionDesc,
           sectionCategory
         }`;
-        const data = await sanity.fetch(query);
+        // Fetch fresh data without cache
+        const data = await sanity.fetch(query, {}, {
+          cache: 'no-store' // Always fetch fresh data
+        });
 
         setSections(data);
       } catch (err) {
@@ -44,6 +47,11 @@ export function useHomepageSections() {
     };
 
     fetchSections();
+    
+    // Refetch every 30 seconds to get latest updates
+    const interval = setInterval(fetchSections, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   return { sections, isLoading, error };

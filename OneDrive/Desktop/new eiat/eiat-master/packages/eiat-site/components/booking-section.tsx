@@ -169,6 +169,14 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
         closeButton: true,
       });
       reset();
+      
+      // Scroll to booking section after successful booking
+      setTimeout(() => {
+        const bookingElement = document.getElementById("booking");
+        if (bookingElement) {
+          bookingElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 500);
     } catch (error) {
       toast.error(
         error instanceof Error

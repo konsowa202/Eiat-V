@@ -13,6 +13,9 @@ import HeroImage from "@/components/hero-image";
 import Link from "next/link";
 import { sanity } from "@/lib/sanity";
 
+// Revalidate every 30 seconds to get fresh data from Sanity
+export const revalidate = 30;
+
 async function getDevices() {
   const query = `*[_type == "device"] | order(_createdAt desc) [0..5] {
     _id,
