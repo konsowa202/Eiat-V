@@ -102,7 +102,7 @@ export default function FeaturedOffersSection({ offers = [] }: { offers?: Offer[
                                             <div className="relative h-[28rem] sm:h-[32rem] w-full bg-gray-50 overflow-hidden">
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
-                                                    src={offer.image?.asset ? urlFor(offer.image).url() : offer.image} // Handle Sanity Image or fallback string (if any leftovers)
+                                                    src={typeof offer.image === 'string' ? offer.image : (offer.image ? urlFor(offer.image).url() : '')} // Handle Sanity Image or fallback string
                                                     alt={offer.title}
                                                     className="w-full h-full object-contain bg-gray-50 group-hover:scale-105 transition-transform duration-500"
                                                 />

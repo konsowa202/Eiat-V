@@ -54,7 +54,7 @@ export default function DoctorsSection({ explicitDoctors }: DoctorsSectionProps)
     };
 
     fetchDoctors();
-  }, []);
+  }, [explicitDoctors]);
 
   if (!doctors || doctors.length === 0) {
     return null;
