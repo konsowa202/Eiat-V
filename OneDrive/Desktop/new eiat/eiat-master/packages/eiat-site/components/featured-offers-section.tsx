@@ -104,7 +104,7 @@ export default function FeaturedOffersSection({ offers = [] }: { offers?: Offer[
                                                 <img
                                                     src={typeof offer.image === 'string' 
                                                         ? offer.image 
-                                                        : (offer.image && offer.image.asset 
+                                                        : (offer.image && typeof offer.image === 'object' && 'asset' in offer.image
                                                             ? urlFor(offer.image).url() 
                                                             : '/placeholder-image.png')} // Handle Sanity Image or fallback string
                                                     alt={offer.title}
