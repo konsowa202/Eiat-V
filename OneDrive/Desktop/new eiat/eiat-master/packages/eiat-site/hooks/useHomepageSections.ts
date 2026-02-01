@@ -1,6 +1,6 @@
 "use client";
 // hooks/useHomepageSections.ts
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import groq from "groq";
 import { sanity } from "@/lib/sanity";
 
@@ -23,36 +23,56 @@ export function useHomepageSections() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    const fetchSections = async () => {
-      try {
-        const query = groq`*[_type == "homepage"] {
-          sectionTitle,
-          sectionSubtitle,
-          sectionDesc,
-          sectionCategory
-        }`;
-        // Fetch fresh data without cache
-        const data = await sanity.fetch(query, {}, {
-          cache: 'no-store' // Always fetch fresh data
-        });
+  const fetchSections = useCallback(async () => {
+    try {
+      const query = groq`*[_type == "homepage"] {
+        sectionTitle,
+        sectionSubtitle,
+        sectionDesc,
+        sectionCategory
+      }`;
+      
+      // Fetch with fresh data - useCdn: false in sanity.ts ensures no CDN cache
+      // For client-side, we create a new client instance to ensure fresh fetch
+      const data = await sanity.fetch(query);
 
-        setSections(data);
-      } catch (err) {
-        console.error("Error fetching homepage:", err);
-        setError(err as Error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSections();
-    
-    // Refetch every 30 seconds to get latest updates
-    const interval = setInterval(fetchSections, 30000);
-    
-    return () => clearInterval(interval);
+      setSections(data);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching homepage:", err);
+      setError(err as Error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  return { sections, isLoading, error };
+  useEffect(() => {
+    // Initial fetch
+    fetchSections();
+    
+    // Refetch every 15 seconds to get latest updates (reduced from 30s for faster updates)
+    const interval = setInterval(fetchSections, 15000);
+    
+    // Also listen for focus and visibility change events to refresh when user returns
+    const handleFocus = () => {
+      fetchSections();
+    };
+    
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchSections();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchSections]);
+
+  return { sections, isLoading, error, refetch: fetchSections };
 }

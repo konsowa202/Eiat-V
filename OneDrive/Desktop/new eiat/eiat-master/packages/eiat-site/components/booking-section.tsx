@@ -111,6 +111,23 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
     if (paramOffer) {
       setValue("offer", paramOffer);
     }
+    
+    // Scroll to booking section if URL has booking params
+    if (paramDoctor || paramOffer || paramDepartment) {
+      // Wait for form to be ready, then scroll
+      setTimeout(() => {
+        const bookingElement = document.getElementById("booking");
+        if (bookingElement) {
+          const elementPosition = bookingElement.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - 100;
+          
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: "smooth"
+          });
+        }
+      }, 300);
+    }
   }, [paramDepartment, paramDoctor, paramOffer, setValue, doctors]);
 
 
@@ -170,13 +187,40 @@ const BookingSection = ({ doctors = [] }: BookingSectionProps) => {
       });
       reset();
       
-      // Scroll to booking section after successful booking
-      setTimeout(() => {
-        const bookingElement = document.getElementById("booking");
-        if (bookingElement) {
-          bookingElement.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 500);
+      // Navigate to booking section after successful booking
+      // First ensure we're on the homepage
+      if (window.location.pathname !== '/') {
+        window.location.href = '/#booking';
+        return;
+      }
+      
+      // If already on homepage, scroll to booking section
+      // Use multiple methods to ensure it works
+      const scrollToBooking = () => {
+        // Method 1: Use hash navigation
+        window.location.hash = 'booking';
+        
+        // Method 2: Direct scroll after a short delay
+        setTimeout(() => {
+          const bookingElement = document.getElementById("booking");
+          if (bookingElement) {
+            // Scroll to element with offset for better visibility
+            const elementPosition = bookingElement.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
+            
+            window.scrollTo({
+              top: offsetPosition,
+              behavior: "smooth"
+            });
+          } else {
+            // Fallback: scroll to top if element not found
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }, 100);
+      };
+      
+      // Execute scroll
+      scrollToBooking();
     } catch (error) {
       toast.error(
         error instanceof Error

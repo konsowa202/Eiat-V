@@ -10,6 +10,7 @@ import GallerySection from "@/components/gallery-section";
 import AboutSection from "@/components/about-section";
 import FeaturedOffersSection from "@/components/featured-offers-section";
 import HeroImage from "@/components/hero-image";
+import HashScrollHandler from "@/components/hash-scroll-handler";
 import Link from "next/link";
 import { sanity } from "@/lib/sanity";
 
@@ -87,6 +88,7 @@ export default async function Home() {
   const aboutData = await getAbout();
   return (
     <main className="min-h-[100dvh] flex flex-col space-y-20 lg:space-y-40 overflow-clip relative">
+      <HashScrollHandler />
       {/* Hero Section */}
       {/* Hero Section */}
       <section id="hero" className="relative flex flex-col items-center px-6 min-h-[90vh] justify-center bg-gradient-to-b from-[#f8fcfd] to-white overflow-hidden">
