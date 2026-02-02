@@ -16,6 +16,7 @@ import { sanity } from "@/lib/sanity";
 
 // Force this page to be dynamic so it always fetches fresh data from Sanity
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 async function getDevices() {
   const query = `*[_type == "device"] | order(_createdAt desc) [0..5] {
