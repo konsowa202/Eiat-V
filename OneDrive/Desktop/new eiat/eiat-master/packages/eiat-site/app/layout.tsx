@@ -5,7 +5,6 @@ import "./globals.css";
 import NavBar from "@/components/nav-bar";
 import Footer from "@/components/footer";
 import { Toaster } from "sonner";
-import Image from "next/image";
 import WhatsApp from "@/components/whats-app";
 import Script from "next/script";
 
@@ -58,7 +57,7 @@ export const metadata: Metadata = {
         alt: "EIAT Medical Clinics - رعاية متكاملة",
       },
       {
-        url: "/1.png",
+        url: "/logo.ico",
         width: 500,
         height: 500,
         alt: "EIAT Logo",
@@ -106,13 +105,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         </noscript>
         {/* End Google Tag Manager (noscript) */}
         <ReactLenis root options={{ smoothWheel: true }} />
-        <Image
-          src="/1.png"
-          alt="logo"
-          className=" fixed opacity-5 -z-1"
-          width={1000}
-          height={1000}
-        />
         <NavBar />
         {children}
         <WhatsApp />

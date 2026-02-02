@@ -107,3 +107,5 @@ certbot --nginx -d eiatclinics.com -d www.eiatclinics.com --non-interactive --ag
 echo "✅ Deployment completed!"
 echo "🌐 Your site should be available at: https://eiatclinics.com"
 
+
+
