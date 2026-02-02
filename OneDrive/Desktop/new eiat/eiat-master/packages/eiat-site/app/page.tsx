@@ -72,7 +72,8 @@ async function getDoctors() {
 }
 
 async function getAbout() {
-  const query = `*[_type == "homepage" && sectionCategory == "نبذة عنا"][0]{
+  // Get latest "about us" section from homepage docs
+  const query = `*[_type == "homepage" && sectionCategory match "*نبذة*"] | order(_updatedAt desc)[0]{
     sectionTitle,
     sectionSubtitle,
     sectionDesc
