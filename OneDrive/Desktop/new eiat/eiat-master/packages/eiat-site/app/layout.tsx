@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/nav-bar";
 
 const cairo = Cairo({
     variable: "--font-geist-sans",
@@ -25,6 +26,7 @@ export default function RootLayout({
     return (
         <html lang="ar" dir="rtl">
             <body className={`${cairo.className} antialiased w-full`}>
+                <Navbar />
                 {children}
             </body>
         </html>
