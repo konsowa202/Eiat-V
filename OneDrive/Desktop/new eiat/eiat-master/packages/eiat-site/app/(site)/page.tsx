@@ -16,6 +16,7 @@ import { sanity } from "@/lib/sanity";
 
 // Force this page to be dynamic so it always fetches fresh data from Sanity
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 async function getDevices() {
   const query = `*[_type == "device"] | order(_createdAt desc) [0..5] {
@@ -87,16 +88,12 @@ export default async function Home() {
   const testimonials = await getTestimonials();
   const doctors = await getDoctors();
   const aboutData = await getAbout();
-
   return (
     <main className="min-h-[100dvh] flex flex-col space-y-20 lg:space-y-40 overflow-clip relative">
       <HashScrollHandler />
-
       {/* Hero Section */}
-      <section
-        id="hero"
-        className="relative flex flex-col items-center px-6 min-h-[90vh] justify-center bg-gradient-to-b from-[#f8fcfd] to-white overflow-hidden"
-      >
+      {/* Hero Section */}
+      <section id="hero" className="relative flex flex-col items-center px-6 min-h-[90vh] justify-center bg-gradient-to-b from-[#f8fcfd] to-white overflow-hidden">
         {/* Abstract Medical Gradient Background */}
         <div className="absolute inset-0 w-full h-full opacity-30 pointer-events-none">
           <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-[#CAA966]/20 rounded-full blur-3xl mix-blend-multiply filter" />
@@ -127,16 +124,10 @@ export default async function Home() {
               </div>
 
               <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
-                <a
-                  href="#booking"
-                  className="px-8 py-4 bg-primary text-white text-lg font-bold rounded-full hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-1"
-                >
+                <a href="#booking" className="px-8 py-4 bg-primary text-white text-lg font-bold rounded-full hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-1">
                   احجز موعدك الآن
                 </a>
-                <Link
-                  href="/offers"
-                  className="px-8 py-4 bg-white text-gray-800 border-2 border-gray-100 text-lg font-bold rounded-full hover:border-primary/50 hover:text-primary transition-all shadow-sm hover:shadow-md"
-                >
+                <Link href="/offers" className="px-8 py-4 bg-white text-gray-800 border-2 border-gray-100 text-lg font-bold rounded-full hover:border-primary/50 hover:text-primary transition-all shadow-sm hover:shadow-md">
                   اكتشف عروضنا
                 </Link>
               </div>
@@ -170,6 +161,8 @@ export default async function Home() {
       <BlurFade>
         <MedicalDepartments />
       </BlurFade>
+
+
 
       {/* Call To Action */}
       <BlurFade>

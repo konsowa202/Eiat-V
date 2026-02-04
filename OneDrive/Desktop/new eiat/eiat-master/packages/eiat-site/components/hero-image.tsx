@@ -42,11 +42,7 @@ export default function HeroImage() {
                 />
 
                 {/* Main Image Container with Float Animation */}
-                <motion.div
-                    animate={{ y: [-10, 10, -10] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                    className="relative"
-                >
+                <motion.div className="relative">
                     {/* Glassmorphic Backplate */}
                     <div className="absolute inset-4 bg-white/30 backdrop-blur-sm rounded-[3rem] -z-10 border border-white/50 shadow-lg transform rotate-6 scale-105" />
 
@@ -62,21 +58,6 @@ export default function HeroImage() {
                             priority
                         />
                     </div>
-
-                    {/* Floating badge feature (optional creative touch) */}
-                    <motion.div
-                        animate={{ y: [5, -5, 5] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                        className="absolute bottom-10 -right-6 bg-white p-3 rounded-2xl shadow-xl flex items-center gap-2 border border-gray-100"
-                    >
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold">
-                            ✓
-                        </div>
-                        <div className="text-right">
-                            <p className="text-xs text-gray-500 font-medium">أطباء معتمدون</p>
-                            <p className="text-sm font-bold text-gray-800">خبرة وكفاءة</p>
-                        </div>
-                    </motion.div>
                 </motion.div>
             </motion.div>
         </div>
