@@ -3,7 +3,11 @@
 import { motion } from "motion/react";
 import ImageWithSkeleton from "./image-with-skeleton";
 
-export default function HeroImage() {
+interface HeroImageProps {
+    src?: string | null;
+}
+
+export default function HeroImage({ src }: HeroImageProps) {
     return (
         <div className="relative w-full h-full flex justify-center items-center p-4">
             {/* Animated Background Blob */}
@@ -49,7 +53,7 @@ export default function HeroImage() {
                     {/* The Image */}
                     <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-white/80 shadow-2xl bg-transparent">
                         <ImageWithSkeleton
-                            src="/hero-doctor-new.png"
+                            src={src || "/hero-doctor-new.png"}
                             alt="طاقم إيات الطبي"
                             width={600}
                             height={700}

@@ -27,8 +27,9 @@ interface OffersViewProps {
 const TABS = [
     { id: "all", label: "الكل" },
     { id: "dental", label: "الأسنان" },
-    { id: "dermatology", label: "الجلدية" },
+    { id: "skin", label: "البشرة" },
     { id: "laser", label: "الليزر" },
+    { id: "cosmetics", label: "التجميل" },
 ];
 
 export default function OffersView({ offers }: OffersViewProps) {

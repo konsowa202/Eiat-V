@@ -36,5 +36,19 @@ export default defineType({
                 hotspot: true,
             },
         }),
+        defineField({
+            name: 'department',
+            title: 'القسم',
+            type: 'string',
+            options: {
+                list: [
+                    { title: 'الأسنان', value: 'dental' },
+                    { title: 'البشرة', value: 'skin' },
+                    { title: 'الليزر', value: 'laser' },
+                    { title: 'التجميل', value: 'cosmetics' },
+                ],
+            },
+            validation: (Rule) => Rule.required(),
+        }),
     ],
 })

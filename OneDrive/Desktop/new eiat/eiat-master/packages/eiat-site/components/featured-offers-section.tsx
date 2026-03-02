@@ -18,8 +18,9 @@ import { SanityImageSource } from "@sanity/image-url/lib/types/types";
 const TABS = [
     { id: "all", label: "الكل" },
     { id: "dental", label: "الأسنان" },
-    { id: "dermatology", label: "الجلدية" },
+    { id: "skin", label: "البشرة" },
     { id: "laser", label: "الليزر" },
+    { id: "cosmetics", label: "التجميل" },
 ];
 
 interface Offer {
@@ -102,10 +103,10 @@ export default function FeaturedOffersSection({ offers = [] }: { offers?: Offer[
                                             <div className="relative h-[28rem] sm:h-[32rem] w-full bg-gray-50 overflow-hidden">
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
-                                                    src={typeof offer.image === 'string' 
-                                                        ? offer.image 
+                                                    src={typeof offer.image === 'string'
+                                                        ? offer.image
                                                         : (offer.image && typeof offer.image === 'object' && 'asset' in offer.image
-                                                            ? urlFor(offer.image).url() 
+                                                            ? urlFor(offer.image).url()
                                                             : '/placeholder-image.png')} // Handle Sanity Image or fallback string
                                                     alt={offer.title}
                                                     className="w-full h-full object-contain bg-gray-50 group-hover:scale-105 transition-transform duration-500"

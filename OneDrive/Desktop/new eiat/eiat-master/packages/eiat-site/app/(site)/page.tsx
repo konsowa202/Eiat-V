@@ -13,8 +13,7 @@ import HeroImage from "@/components/hero-image";
 import HashScrollHandler from "@/components/hash-scroll-handler";
 import Link from "next/link";
 import { sanity } from "@/lib/sanity";
-
-// Force this page to be dynamic so it always fetches fresh data from Sanity
+import { urlFor } from "@/lib/sanityImage";// Force this page to be dynamic so it always fetches fresh data from Sanity
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -77,7 +76,15 @@ async function getAbout() {
   const query = `*[_type == "homepage" && sectionCategory match "*نبذة*"] | order(_updatedAt desc)[0]{
     sectionTitle,
     sectionSubtitle,
-    sectionDesc
+    sectionDesc,
+    image
+  }`;
+  return await sanity.fetch(query);
+}
+
+async function getHero() {
+  const query = `*[_type == "homepage" && sectionCategory match "*الرئيسية*"] | order(_updatedAt desc)[0]{
+    image
   }`;
   return await sanity.fetch(query);
 }
@@ -88,6 +95,11 @@ export default async function Home() {
   const testimonials = await getTestimonials();
   const doctors = await getDoctors();
   const aboutData = await getAbout();
+  const heroData = await getHero();
+
+  const heroImageUrl = heroData?.image ? urlFor(heroData.image).url() : null;
+  const aboutImageUrl = aboutData?.image ? urlFor(aboutData.image).url() : null;
+
   return (
     <main className="min-h-[100dvh] flex flex-col space-y-20 lg:space-y-40 overflow-clip relative">
       <HashScrollHandler />
@@ -134,7 +146,7 @@ export default async function Home() {
             </div>
 
             <div className="w-full lg:w-1/2 relative lg:h-[650px] flex justify-center items-center">
-              <HeroImage />
+              <HeroImage src={heroImageUrl} />
             </div>
           </div>
         </div>
@@ -155,6 +167,7 @@ export default async function Home() {
         title={aboutData?.sectionTitle}
         subtitle={aboutData?.sectionSubtitle}
         description={aboutData?.sectionDesc}
+        image={aboutImageUrl}
       />
 
       {/* Dental Services */}

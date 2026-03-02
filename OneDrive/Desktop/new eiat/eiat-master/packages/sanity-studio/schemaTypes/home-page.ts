@@ -1,4 +1,4 @@
-import {defineField, defineType} from 'sanity'
+import { defineField, defineType } from 'sanity'
 
 export default defineType({
   name: 'homepage',
@@ -29,17 +29,26 @@ export default defineType({
       type: 'string',
       options: {
         list: [
-          {title: 'الأطباء', value: 'الأطباء'},
-          {title: 'التقيمات', value: 'التقيمات'},
-          {title: 'الحجز', value: 'الحجز'},
-          {title: 'معرض الصور', value: 'معرض الصور'},
-          {title: 'خدمات', value: 'خدمات'},
-          {title: 'نبذة عنا', value: 'نبذة عنا'},
-          {title: 'تواصل معنا', value: 'تواصل معنا'},
+          { title: 'الرئيسية', value: 'الرئيسية' },
+          { title: 'الأطباء', value: 'الأطباء' },
+          { title: 'التقيمات', value: 'التقيمات' },
+          { title: 'الحجز', value: 'الحجز' },
+          { title: 'معرض الصور', value: 'معرض الصور' },
+          { title: 'خدمات', value: 'خدمات' },
+          { title: 'نبذة عنا', value: 'نبذة عنا' },
+          { title: 'تواصل معنا', value: 'تواصل معنا' },
         ],
       },
 
       validation: (Rule) => Rule.required().min(0),
+    }),
+    defineField({
+      name: 'image',
+      title: 'صورة القسم',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
     }),
   ],
   preview: {
@@ -48,7 +57,7 @@ export default defineType({
       subtitle: 'sectionSubtitle',
       Category: 'sectionCategory',
     },
-    prepare({title, subtitle, Category}) {
+    prepare({ title, subtitle, Category }) {
       return {
         title: `${Category} — ${title}`,
         subtitle: subtitle || '',

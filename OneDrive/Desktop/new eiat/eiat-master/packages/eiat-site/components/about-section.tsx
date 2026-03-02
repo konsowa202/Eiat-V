@@ -16,9 +16,10 @@ interface AboutSectionProps {
   title?: string;
   subtitle?: string;
   description?: string;
+  image?: string | null;
 }
 
-const AboutSection = ({ title, subtitle, description }: AboutSectionProps) => {
+const AboutSection = ({ title, subtitle, description, image }: AboutSectionProps) => {
   return (
     <section id="about" className="py-24 relative overflow-hidden bg-white">
       <div className="container mx-auto px-4 relative z-10">
@@ -71,7 +72,7 @@ const AboutSection = ({ title, subtitle, description }: AboutSectionProps) => {
               <div className="absolute -inset-4 bg-primary/10 rounded-[2.5rem] transform -rotate-3" />
               <div className="relative h-[400px] sm:h-[500px] rounded-[2rem] overflow-hidden shadow-2xl border-8 border-white">
                 <ImageWithSkeleton
-                  src="/about-new.png"
+                  src={image || "/about-new.png"}
                   alt="فريق إيات الطبي"
                   fill
                   className="object-cover"
