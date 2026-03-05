@@ -9,7 +9,6 @@ import Link from "next/link";
 import { SanityImageSource } from "@sanity/image-url/lib/types/types";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import staticOffersData from "@/lib/static-offers.json";
 
 interface Offer {
     _id: string;
@@ -35,18 +34,8 @@ const TABS = [
 export default function OffersView({ offers }: OffersViewProps) {
     const [activeTab, setActiveTab] = useState("all");
 
-    // Merge Sanity offers with static offers
-    const allOffers: Offer[] = [
-        ...offers,
-        ...staticOffersData.map((offer: { id: string; originalName: string; image: string; category: string }) => ({
-            _id: offer.id,
-            title: offer.originalName.split(".")[0], // Use filename as title approximation
-            description: "", // Description implicit in image
-            discount: "",
-            image: offer.image,
-            department: offer.category
-        }))
-    ];
+    // Only use Sanity dynamic offers
+    const allOffers: Offer[] = offers;
 
     const filteredOffers = activeTab === "all"
         ? allOffers
