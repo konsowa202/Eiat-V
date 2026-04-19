@@ -1,5 +1,0 @@
-{
-  "buildCommand": "pnpm --filter eiat build",
-  "outputDirectory": "packages/eiat-site/.next",
-  "framework": "nextjs"
-}
