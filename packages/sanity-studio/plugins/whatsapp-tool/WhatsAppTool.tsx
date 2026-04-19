@@ -64,8 +64,8 @@ const META_CLIENT_FALLBACK: MetaWaTemplateRow[] = [
   {name: 'opening', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
   {name: 'open', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
   {name: 'confirmation', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 4, headerFormat: 'NONE'},
-  {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 1, headerFormat: 'IMAGE'},
-  {name: 'eiat1', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 1, headerFormat: 'IMAGE'},
+  {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: 'مرحباً بك من عيادات إيات لطب الأسنان! 🦷✨ سعداء بتواصلك معنا، وسنقوم بالرد عليك في أقرب وقت ممكن.', bodyVariableCount: 0, headerFormat: 'IMAGE'},
+  {name: 'eiat1', language: 'ar', category: 'Utility', bodyText: 'أهلاً بك عميلنا العزيز بكلمة تأكيد! تم استلام رسالتك وسيتم التعامل معها فوراً.', bodyVariableCount: 0, headerFormat: 'IMAGE'},
   {name: 'hello_world', language: 'en_US', category: 'Utility', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
 ]
 
@@ -662,9 +662,7 @@ export function WhatsAppTool() {
       if (t.headerFormat === 'IMAGE') {
         defaultHeader = 'https://eiat-v.vercel.app/wa-logo.jpg'
       }
-      if (defaultParams.length > 0) {
-        defaultParams[0] = 'https://eiatclinics.com/'
-      }
+      // No body params to fill if count is 0
     }
 
     setMetaParamValues(defaultParams)
