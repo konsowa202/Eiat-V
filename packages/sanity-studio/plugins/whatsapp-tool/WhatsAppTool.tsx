@@ -64,7 +64,7 @@ const META_CLIENT_FALLBACK: MetaWaTemplateRow[] = [
   {name: 'opening', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
   {name: 'open', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
   {name: 'confirmation', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 4, headerFormat: 'NONE'},
-  {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'IMAGE'},
+  {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 1, headerFormat: 'IMAGE'},
   {name: 'eiat1', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 1, headerFormat: 'IMAGE'},
   {name: 'hello_world', language: 'en_US', category: 'Utility', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
 ]
@@ -743,6 +743,13 @@ export function WhatsAppTool() {
       clearTimeout(timer)
     }
   }, [])
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [activeThread?.messages?.length, selectedThreadKey])
 
   const stats: Stats = {
     total: conversations.length,
@@ -2481,49 +2488,6 @@ export function WhatsAppTool() {
                               ))}
                             </select>
                           ) : null}
-                          {!selectedMetaKey && (metaTplFetchError || metaUsedFallback) ? (
-                            <div
-                              style={{
-                                fontSize: '11px',
-                                lineHeight: 1.45,
-                                color: metaTplFetchError && !metaUsedFallback ? '#fca5a5' : 'var(--wa-muted)',
-                                padding: '6px 4px 0',
-                                maxWidth: '520px',
-                              }}
-                            >
-                              {metaUsedFallback ? '📌 قائمة احتياطية (أسماء معروفة). ' : ''}
-                              {metaTplFetchError || ''}
-                            </div>
-                          ) : null}
-                          <div
-                            style={{
-                              fontSize: '10px',
-                              lineHeight: 1.55,
-                              color: 'var(--wa-muted)',
-                              padding: '8px 4px 2px',
-                              maxWidth: '560px',
-                              borderTop: '1px dashed var(--wa-border)',
-                              marginTop: '4px',
-                            }}
-                          >
-                            <strong style={{color: 'var(--wa-text)'}}>عن «Re-engagement message»:</strong> هذا اسم
-                            العرض في مدير ميتا لنفس القالب{' '}
-                            <span dir="ltr" style={{fontSize: '10px'}}>
-                              open
-                            </span>
-                            . الإرسال إلى فيسبوك يستخدم{' '}
-                            <span dir="ltr" style={{fontSize: '10px'}}>
-                              template.name = open
-                            </span>{' '}
-                            ولغة القالب من القائمة —{' '}
-                            <strong>لا</strong> يُرسل هذا الإنجليزي كنص مستقل بدل القالب. في Meta for Developers →
-                            WhatsApp → <strong>Webhook fields</strong> فعّل الاشتراك في الحقل{' '}
-                            <strong>messages</strong> حتى تصل الرسائل الواردة وحالات التسليم والفشل إلى{' '}
-                            <span dir="ltr" style={{fontSize: '10px'}}>
-                              /api/whatsapp/webhook
-                            </span>{' '}
-                            (بدون <strong>messages</strong> قد لا تتحدث الحالة في Sanity رغم قبول Graph).
-                          </div>
                           {selectedMetaKey ? (
                             <div
                               style={{
