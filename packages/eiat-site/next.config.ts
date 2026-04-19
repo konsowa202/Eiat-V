@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   images: {
     domains: ["placehold.co", "cdn.sanity.io"],
   },
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/studio',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
