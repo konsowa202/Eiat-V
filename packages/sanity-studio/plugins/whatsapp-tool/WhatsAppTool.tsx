@@ -12,8 +12,9 @@ const DEFAULT_WA_SITE_ORIGIN = 'https://eiat-v.vercel.app'
  * so `fetch` always targets a full URL (avoids rare base-path / extension / SW quirks with `''` + `/api/...`).
  */
 function getWaSiteOrigin(): string {
-  const im = import.meta as unknown as {env?: Record<string, string | undefined>}
-  const raw = im.env?.SANITY_STUDIO_WA_SITE_ORIGIN
+  // Destructure env from import.meta to avoid Next.js build warnings
+  const { env } = import.meta as any
+  const raw = env?.SANITY_STUDIO_WA_SITE_ORIGIN
   if (raw && String(raw).trim()) return String(raw).trim().replace(/\/$/, '')
 
   if (typeof window !== 'undefined') {
@@ -28,7 +29,7 @@ function getWaSiteOrigin(): string {
     }
   }
 
-  return DEFAULT_WA_SITE_ORIGIN.replace(/\/$/, '')
+  return '' // Fallback to relative path for current host (Vercel)
 }
 
 function waApiAbs(path: string): string {
