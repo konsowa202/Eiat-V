@@ -650,8 +650,22 @@ export function WhatsAppTool() {
       setMetaHeaderImageInput('')
       return
     }
-    setMetaParamValues(Array.from({length: Math.max(0, t.bodyVariableCount)}, () => ''))
-    setMetaHeaderImageInput('')
+
+    const defaultParams = Array.from({length: Math.max(0, t.bodyVariableCount)}, () => '')
+    let defaultHeader = ''
+
+    // Global Defaults for specific templates
+    if (t.name === 'eiat' || t.name === 'eiat1') {
+      if (t.headerFormat === 'IMAGE') {
+        defaultHeader = 'https://eiat-v.vercel.app/wa-logo.jpg'
+      }
+      if (defaultParams.length > 0) {
+        defaultParams[0] = 'https://eiatclinics.com/'
+      }
+    }
+
+    setMetaParamValues(defaultParams)
+    setMetaHeaderImageInput(defaultHeader)
   }, [selectedMetaKey, metaWaTemplates])
 
   // Load conversations
@@ -2551,23 +2565,34 @@ export function WhatsAppTool() {
                               <span style={{fontSize: '11px', color: 'var(--wa-muted)', fontWeight: 600}}>
                                 متغيرات القالب بالترتيب (مثل {'{{1}}'}، {'{{2}}'} في مدير فيسبوك)
                               </span>
-                              {Array.from({length: selectedMetaTpl.bodyVariableCount}, (_, i) => (
-                                <input
-                                  key={i}
-                                  dir="auto"
-                                  style={{...S.input, marginBottom: 0, fontSize: '13px'}}
-                                  placeholder={`القيمة ${i + 1}`}
-                                  value={metaParamValues[i] ?? ''}
-                                  onChange={(e) => {
-                                    const v = e.target.value
-                                    setMetaParamValues((prev) => {
-                                      const next = [...prev]
-                                      next[i] = v
-                                      return next
-                                    })
-                                  }}
-                                />
-                              ))}
+                              {Array.from({length: selectedMetaTpl.bodyVariableCount}, (_, i) => {
+                                let label = `القيمة ${i + 1}`
+                                if (selectedMetaTpl.name === 'confirmation') {
+                                  if (i === 0) label = 'اسم العميل'
+                                  if (i === 1) label = 'الموعد'
+                                  if (i === 2) label = 'الخدمة المحجوزة'
+                                  if (i === 3) label = 'رقم التأكيد'
+                                }
+                                return (
+                                  <div key={i} style={{marginBottom: '6px'}}>
+                                    <label style={{...S.label, fontSize: '10px', marginBottom: '2px'}}>{label}</label>
+                                    <input
+                                      dir="auto"
+                                      style={{...S.input, marginBottom: 0, fontSize: '13px'}}
+                                      placeholder={label}
+                                      value={metaParamValues[i] ?? ''}
+                                      onChange={(e) => {
+                                        const v = e.target.value
+                                        setMetaParamValues((prev) => {
+                                          const next = [...prev]
+                                          next[i] = v
+                                          return next
+                                        })
+                                      }}
+                                    />
+                                  </div>
+                                )
+                              })}
                             </div>
                           ) : null}
                           {selectedMetaTpl && selectedMetaTpl.headerFormat === 'IMAGE' ? (
