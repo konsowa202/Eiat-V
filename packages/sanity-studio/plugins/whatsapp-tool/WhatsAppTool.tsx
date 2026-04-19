@@ -61,6 +61,7 @@ interface MetaWaTemplateRow {
 
 /** When `/api/whatsapp/meta-templates` is 404 (Vercel mis-root) or non-JSON — same names as server fallback. */
 const META_CLIENT_FALLBACK: MetaWaTemplateRow[] = [
+  {name: 'opening', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
   {name: 'open', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
   {name: 'confirmation', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 4, headerFormat: 'NONE'},
   {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'IMAGE'},
@@ -92,9 +93,11 @@ const OPEN_META_SUITE_LABEL = /^[\s\u00a0\u200c-\u200f]*re[-\s]?engagement\s+mes
 
 const META_GRAPH_BODY_AS_ENGLISH_LABEL: Record<string, RegExp> = {
   open: OPEN_META_SUITE_LABEL,
+  opening: OPEN_META_SUITE_LABEL,
 }
 
 const META_TEMPLATE_AR_PREVIEW: Record<string, string> = {
+  opening: 'حياكم الله... مجمع عيادات إيات الطبي',
   open: 'قالب اختبار بدون متغيرات',
 }
 
@@ -102,7 +105,7 @@ const OPEN_ENGLISH_LABEL_LINE = OPEN_META_SUITE_LABEL
 
 function isOpenTemplateContext(templateUsedOrName: string | undefined): boolean {
   const t = (templateUsedOrName || '').trim().toLowerCase()
-  return t === 'open' || t === 're-engagement message' || /^re[-\s]?engagement/.test(t)
+  return t === 'open' || t === 'opening' || t === 're-engagement message' || /^re[-\s]?engagement/.test(t)
 }
 
 /**
