@@ -3,7 +3,6 @@ import { waAccessToken, waPhoneNumberId, waBusinessAccountId } from "../wa-env";
 
 export const dynamic = "force-dynamic";
 
-const WA_PHONE_ID = waPhoneNumberId();
 const WA_BUSINESS_ID = waBusinessAccountId();
 const GRAPH = `https://graph.facebook.com/v21.0`;
 
