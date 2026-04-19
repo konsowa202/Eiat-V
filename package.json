@@ -1,0 +1,27 @@
+{
+  "name": "root",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": "20.x"
+  },
+  "workspaces": [
+    "packages/eiat-site",
+    "packages/eiat-dashboard",
+    "packages/sanity-studio"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter eiat dev",
+    "build": "pnpm --filter eiat build",
+    "start": "pnpm --filter eiat start",
+    "dev:sanity": "pnpm --filter eiat-sanity-studio dev",
+    "build:sanity": "pnpm --filter eiat-sanity-studio build",
+    "start:sanity": "pnpm --filter eiat-sanity-studio start"
+  },
+  "dependencies": {
+    "react-icons": "^5.5.0"
+  },
+  "devDependencies": {
+    "lerna": "^8.2.3"
+  }
+}
