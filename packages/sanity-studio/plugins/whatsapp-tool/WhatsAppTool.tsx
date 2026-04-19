@@ -744,13 +744,6 @@ export function WhatsAppTool() {
     }
   }, [])
 
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
-    }
-  }, [activeThread?.messages?.length, selectedThreadKey])
-
   const stats: Stats = {
     total: conversations.length,
     totalOut: conversations.filter((c) => c.direction === 'outgoing').length,
@@ -1317,12 +1310,14 @@ export function WhatsAppTool() {
   }, [creatingNewChat])
 
   useEffect(() => {
-    if (tab !== 'chats') return
+    if (tab !== 'chats' || logTableMode) return
     const el = chatScrollRef.current
     if (!el) return
-    requestAnimationFrame(() => {
+    // Use a small timeout to ensure layout has settled on mount/refresh
+    const timer = setTimeout(() => {
       el.scrollTop = el.scrollHeight
-    })
+    }, 60)
+    return () => clearTimeout(timer)
   }, [tab, activeThread?.messages.length, selectedThreadKey, logTableMode])
 
   return (
