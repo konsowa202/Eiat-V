@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { jsonCors, emptyCors } from "../studio-cors";
 import { waAccessToken, waPhoneNumberId } from "../wa-env";
 
