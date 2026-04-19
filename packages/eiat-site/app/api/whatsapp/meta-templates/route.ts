@@ -1,5 +1,5 @@
 import { jsonCors, emptyCors } from "../studio-cors";
-import { waAccessToken, waPhoneNumberId, waBusinessAccountId } from "../wa-env";
+import { waAccessToken, waBusinessAccountId } from "../wa-env";
 
 export const dynamic = "force-dynamic";
 
