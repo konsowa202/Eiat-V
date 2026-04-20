@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useRef, useMemo, startTransition} from 'react'
+import React, {useState, useEffect, useCallback, useRef, useMemo, startTransition, memo} from 'react'
 import {useClient} from 'sanity'
 
 /** Production Next app (WhatsApp API routes). Override with SANITY_STUDIO_WA_SITE_ORIGIN in .env */
@@ -544,7 +544,6 @@ export function WhatsAppTool() {
   const [searchLog, setSearchLog] = useState('')
   const [logFilter, setLogFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
-  const [chatQuickMsg, setChatQuickMsg] = useState('')
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [creatingNewChat, setCreatingNewChat] = useState(false)
   const [logTableMode, setLogTableMode] = useState(false)
@@ -555,10 +554,8 @@ export function WhatsAppTool() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [chatNameDraft, setChatNameDraft] = useState('')
   const [savingChatName, setSavingChatName] = useState(false)
-  const [isUserTyping, setIsUserTyping] = useState(false)
   const [readEpoch, setReadEpoch] = useState(0)
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
-  const [editingMsgText, setEditingMsgText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [longPressMenu, setLongPressMenu] = useState<{
     msgId: string
@@ -704,18 +701,18 @@ export function WhatsAppTool() {
     const interval = setInterval(() => {
       const activeTag = (document.activeElement?.tagName || '').toLowerCase()
       const inInput = activeTag === 'input' || activeTag === 'textarea'
-      if (inInput || isUserTyping || sending || recording) return
+      if (inInput || isTypingRef.current || sending || recording) return
       void fetchConversations()
     }, 90000)
     return () => clearInterval(interval)
-  }, [fetchConversations, isUserTyping, sending, recording])
+  }, [fetchConversations, sending, recording])
 
   // Refresh on focus/visibility only when idle, throttled to ~90s (same cadence as polling).
   useEffect(() => {
     const maybeFetch = () => {
-      if (sending || recording) return
+      if (sending || recording || isTypingRef.current) return
       const activeTag = (document.activeElement?.tagName || '').toLowerCase()
-      if (activeTag === 'input' || activeTag === 'textarea' || isUserTyping) return
+      if (activeTag === 'input' || activeTag === 'textarea') return
       const now = Date.now()
       if (now - lastFocusFetchAtRef.current < 90000) return
       lastFocusFetchAtRef.current = now
@@ -735,22 +732,18 @@ export function WhatsAppTool() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [fetchConversations, sending, recording, isUserTyping])
+  }, [fetchConversations, sending, recording])
 
-  // Detect active typing — optimised: only set state on transition to avoid per-keystroke re-renders.
+  // Detect active typing (ref only, no state to avoid re-renders)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const onInput = (ev: Event) => {
       const tag = ((ev.target as HTMLElement | null)?.tagName || '').toLowerCase()
       if (tag !== 'input' && tag !== 'textarea') return
-      if (!isTypingRef.current) {
-        isTypingRef.current = true
-        setIsUserTyping(true)
-      }
+      isTypingRef.current = true
       clearTimeout(timer)
       timer = setTimeout(() => {
         isTypingRef.current = false
-        setIsUserTyping(false)
       }, 1400)
     }
     document.addEventListener('input', onInput, true)
@@ -871,14 +864,14 @@ export function WhatsAppTool() {
     }
   }
 
-  const handleChatSend = async () => {
+  const handleChatSend = async (customText?: string) => {
     if (selectedMetaTpl && !broadcastMode) {
       return showAlert(
         'err',
         '⚠️ يوجد قالب فيسبوك محدد — استخدم زر «إرسال قالب فيسبوك» أو اضغط «إزالة» لإلغاء اختيار القالب',
       )
     }
-    const text = chatQuickMsg.trim()
+    const text = (customText ?? '').trim()
     if (!text && !selectedChatTpl) return showAlert('err', '⚠️ اكتب رسالة أو اختر قالب')
 
     let targetPhone = ''
@@ -927,7 +920,6 @@ export function WhatsAppTool() {
         showAlert('err', `❌ فشل (V3.1): ${waSendFailureMessage(data)} | القالب: ${payload.templateUsed}`)
       } else {
         showAlert('ok', `✅ تم الإرسال (V3.1)`)
-        setChatQuickMsg('')
         setSelectedChatTpl(null)
         setTimeout(fetchConversations, 800)
       }
@@ -939,7 +931,7 @@ export function WhatsAppTool() {
     }
   }
 
-  const handleChatSendMetaTemplate = async () => {
+  const handleChatSendMetaTemplate = async (customText?: string) => {
     if (selectedChatTpl) {
       return showAlert('err', '⚠️ أزل قالب Sanity أولاً أو ألغِ اختياره لإرسال قالب فيسبوك')
     }
@@ -974,7 +966,7 @@ export function WhatsAppTool() {
 
     const filledRaw = fillMetaBodyPlaceholders(t.bodyText, metaParamValues).trim()
     const filledBody = metaSanityPreviewBody(t.name, filledRaw)
-    const extra = chatQuickMsg.trim()
+    const extra = (customText ?? '').trim()
     // Some gateways / older deploys reject empty `message`; zero-var templates often have no bodyText in fallback rows.
     const messageBodyForSanity =
       [filledBody, extra].filter(Boolean).join('\n\n').trim() ||
@@ -1019,7 +1011,6 @@ export function WhatsAppTool() {
         setSelectedMetaKey('')
         setMetaParamValues([])
         setMetaHeaderImageInput('')
-        setChatQuickMsg('')
         setTimeout(fetchConversations, 800)
       }
     } catch (err: unknown) {
@@ -1030,7 +1021,7 @@ export function WhatsAppTool() {
     }
   }
 
-  const handleChatMedia = async (file: File) => {
+  const handleChatMedia = async (file: File, customCaption?: string) => {
     let targetPhone = ''
     if (selectedThreadKey) {
       targetPhone = activeThread?.sendPhone || ''
@@ -1051,7 +1042,7 @@ export function WhatsAppTool() {
           phone: targetPhone,
           patientName: 'من المحادثات',
           templateUsed: 'ميديا',
-          caption: chatQuickMsg.trim(),
+          caption: (customCaption ?? '').trim(),
           fileName: file.name || `upload-${Date.now()}.bin`,
           fileType: file.type || 'application/octet-stream',
           fileDataBase64,
@@ -1062,12 +1053,10 @@ export function WhatsAppTool() {
         showAlert('err', `❌ فشل إرسال الملف: ${waSendFailureMessage(data)}`)
       } else {
         showAlert('ok', `✅ تم إرسال الملف`)
-        setChatQuickMsg('')
         setTimeout(fetchConversations, 1000)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
-      showAlert('err', `❌ ${msg}`)
+      showAlert('err', `❌ خطأ في الاتصال`)
     } finally {
       setSending(false)
     }
@@ -1123,8 +1112,8 @@ export function WhatsAppTool() {
     await handleChatMedia(voiceFile)
   }
 
-  const handleBroadcastText = async () => {
-    const text = chatQuickMsg.trim()
+  const handleBroadcastText = async (customText?: string) => {
+    const text = (customText ?? '').trim()
     if (!text) return showAlert('err', '⚠️ اكتب الرسالة أولاً')
     const targets = filteredThreads.map((t) => t.sendPhone)
     if (!targets.length) return showAlert('err', '⚠️ لا توجد محادثات لإرسال جماعي')
@@ -1150,7 +1139,6 @@ export function WhatsAppTool() {
       } catch {
         fail += 1
       }
-      // avoid rate limits with a tiny gap
       await new Promise((r) => setTimeout(r, 120))
     }
     setSending(false)
@@ -1158,7 +1146,7 @@ export function WhatsAppTool() {
     showAlert('ok', `📣 الإرسال الجماعي تم: ✅ ${ok} / ❌ ${fail}`)
   }
 
-  const handleBroadcastMedia = async (file: File) => {
+  const handleBroadcastMedia = async (file: File, customCaption?: string) => {
     const targets = filteredThreads.map((t) => t.sendPhone)
     if (!targets.length) return showAlert('err', '⚠️ لا توجد محادثات لإرسال جماعي')
 
@@ -1175,7 +1163,7 @@ export function WhatsAppTool() {
             phone: targetPhone,
             patientName: 'إرسال جماعي',
             templateUsed: 'Broadcast Media',
-            caption: chatQuickMsg.trim(),
+            caption: (customCaption ?? '').trim(),
             fileName: file.name || `upload-${Date.now()}.bin`,
             fileType: file.type || 'application/octet-stream',
             fileDataBase64,
@@ -1338,31 +1326,26 @@ export function WhatsAppTool() {
     }
   }
 
-  const handleStartEdit = (msgId: string, currentBody: string) => {
+  const handleStartEdit = (msgId: string) => {
     setEditingMsgId(msgId)
-    setEditingMsgText(currentBody)
-    // scroll composer into view
+    // The text will be handled internally by the WhatsAppComposer
     setTimeout(() => {
-      const el = document.getElementById('wa-composer-textarea')
-      el?.focus()
+      document.getElementById('wa-composer-textarea')?.focus()
     }, 80)
   }
 
   const handleCancelEdit = () => {
     setEditingMsgId(null)
-    setEditingMsgText('')
   }
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (newBody: string) => {
     if (!editingMsgId) return
-    const newBody = editingMsgText.trim()
-    if (!newBody) return showAlert('err', '⚠️ نص الرسالة لا يجوز أن يكون فارغاً')
+    if (!newBody.trim()) return showAlert('err', '⚠️ نص الرسالة لا يجوز أن يكون فارغاً')
     setSavingEdit(true)
     try {
       await client.patch(editingMsgId).set({messageBody: newBody}).commit()
       showAlert('ok', '✅ تم تعديل الرسالة')
       setEditingMsgId(null)
-      setEditingMsgText('')
       void fetchConversations()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'فشل التعديل'
@@ -2364,7 +2347,7 @@ export function WhatsAppTool() {
                             }}
                             onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59,130,246,0.1)')}
                             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                            onClick={() => { handleStartEdit(longPressMenu.msgId, longPressMenu.body); setLongPressMenu(null) }}
+                            onClick={() => { handleStartEdit(longPressMenu.msgId); setLongPressMenu(null) }}
                           >
                             <span>✏️</span> تعديل
                           </button>
@@ -2823,209 +2806,25 @@ export function WhatsAppTool() {
                               )}
                             </div>
                           ) : null}
-                          {editingMsgId ? (
-                            <div style={{
-                              padding: '8px 10px',
-                              borderRadius: '8px',
-                              background: 'rgba(59,130,246,0.1)',
-                              border: '1px solid rgba(59,130,246,0.35)',
-                              marginBottom: '6px',
-                              fontSize: '11px',
-                              color: '#60a5fa',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                            }}>
-                              <span>✏️ وضع التعديل — ستُعدَّل الرسالة في السجل فقط (لن تُرسَل مجدداً)</span>
-                              <button
-                                type="button"
-                                onClick={handleCancelEdit}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: '#f87171',
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                  fontWeight: 700,
-                                  padding: '0 4px',
-                                }}
-                              >✕ إلغاء</button>
-                            </div>
-                          ) : null}
-                          <div style={{position: 'relative', flex: 1}}>
-                            <textarea
-                              id="wa-composer-textarea"
-                              style={{
-                                ...S.textarea,
-                                width: '100%',
-                                minHeight: '72px',
-                                border: editingMsgId
-                                  ? '1px solid rgba(59,130,246,0.6)'
-                                  : undefined,
-                                paddingLeft: '42px',
-                                boxSizing: 'border-box',
-                              }}
-                              placeholder={editingMsgId ? 'عدِّل نص الرسالة هنا…' : 'اكتب ردك هنا…'}
-                              value={editingMsgId ? editingMsgText : chatQuickMsg}
-                              onChange={(e) => {
-                                if (editingMsgId) setEditingMsgText(e.target.value)
-                                else setChatQuickMsg(e.target.value)
-                              }}
-                              onContextMenu={(e) => {
-                                // Allow native context menu (paste etc.)
-                                e.stopPropagation()
-                              }}
-                              onPaste={(e) => {
-                                // Prevent framework interception of native paste
-                                e.stopPropagation()
-                              }}
-                            />
-                            {/* Paste button */}
-                            <button
-                              type="button"
-                              title="لصق"
-                              style={{
-                                position: 'absolute',
-                                left: '8px',
-                                bottom: '10px',
-                                background: 'transparent',
-                                border: '1px solid var(--wa-border)',
-                                borderRadius: '6px',
-                                color: 'var(--wa-muted)',
-                                fontSize: '14px',
-                                cursor: 'pointer',
-                                padding: '3px 6px',
-                                lineHeight: 1,
-                                transition: 'color 0.15s, border-color 0.15s',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.color = 'var(--wa-brand)'
-                                e.currentTarget.style.borderColor = 'var(--wa-brand)'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.color = 'var(--wa-muted)'
-                                e.currentTarget.style.borderColor = 'var(--wa-border)'
-                              }}
-                              onClick={async () => {
-                                try {
-                                  const text = await navigator.clipboard.readText()
-                                  if (editingMsgId) setEditingMsgText(prev => prev + text)
-                                  else setChatQuickMsg(prev => prev + text)
-                                  document.getElementById('wa-composer-textarea')?.focus()
-                                } catch {
-                                  showAlert('err', '⚠️ اسمح للمتصفح بالوصول إلى الحافظة')
-                                }
-                              }}
-                            >📋</button>
-                          </div>
-                        </div>
-                        <div style={{display: 'flex', flexDirection: 'column' as const, gap: '8px'}}>
-                          <label
-                            style={{
-                              display: 'inline-block',
-                              padding: '10px 14px',
-                              background: 'rgba(56,189,248,0.15)',
-                              border: '1px solid rgba(56,189,248,0.35)',
-                              borderRadius: '10px',
-                              cursor: sending ? 'not-allowed' : 'pointer',
-                              fontSize: '12px',
-                              textAlign: 'center' as const,
-                            }}
-                          >
-                            📎 ملف
-                            <input
-                              type="file"
-                              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                              style={{display: 'none'}}
-                              disabled={sending}
-                              onChange={(e) => {
-                                const f = e.target.files?.[0]
-                                if (f) {
-                                  if (broadcastMode) void handleBroadcastMedia(f)
-                                  else void handleChatMedia(f)
-                                }
-                                e.target.value = ''
-                              }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            style={{
-                              padding: '10px 14px',
-                              background: recording ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)',
-                              border: recording
-                                ? '1px solid rgba(239,68,68,0.45)'
-                                : '1px solid rgba(245,158,11,0.45)',
-                              borderRadius: '10px',
-                              cursor: sending ? 'not-allowed' : 'pointer',
-                              color: recording ? '#f87171' : '#fbbf24',
-                              fontSize: '12px',
-                              fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
-                            }}
-                            disabled={sending}
-                            onClick={() => {
-                              if (recording) void stopAndSendVoiceRecording()
-                              else void startVoiceRecording()
-                            }}
-                          >
-                            {recording ? '⏹️ إيقاف وإرسال الصوت' : '🎙️ تسجيل صوت'}
-                          </button>
-                          {editingMsgId ? (
-                            <button
-                              type="button"
-                              style={{
-                                ...S.sendBtn,
-                                marginTop: 0,
-                                padding: '12px 18px',
-                                background: 'rgba(59,130,246,0.85)',
-                                opacity: savingEdit ? 0.7 : 1,
-                                cursor: savingEdit ? 'not-allowed' : 'pointer',
-                              }}
-                              disabled={savingEdit}
-                              onClick={() => void handleSaveEdit()}
-                            >
-                              {savingEdit ? '⏳ جاري الحفظ…' : '💾 حفظ التعديل'}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              style={{
-                                ...S.sendBtn,
-                                marginTop: 0,
-                                padding: '12px 18px',
-                                opacity: sending ? 0.7 : 1,
-                                cursor: sending ? 'not-allowed' : 'pointer',
-                              }}
-                              disabled={sending}
-                              onClick={() => {
-                                if (broadcastMode) void handleBroadcastText()
-                                else void handleChatSend()
-                              }}
-                            >
-                              {sending ? '…' : broadcastMode ? '📣 إرسال جماعي' : '📤 إرسال نص'}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            style={{
-                              marginTop: 0,
-                              padding: '12px 14px',
-                              borderRadius: '10px',
-                              border: '1px solid rgba(59,130,246,0.45)',
-                              background: 'rgba(59,130,246,0.2)',
-                              color: '#93c5fd',
-                              fontWeight: 700,
-                              fontSize: '12px',
-                              fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
-                              opacity: !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 0.55 : 1,
-                              cursor:
-                                !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 'not-allowed' : 'pointer',
-                            }}
-                            disabled={!!editingMsgId || sending || broadcastMode || !selectedMetaTpl}
-                            onClick={() => void handleChatSendMetaTemplate()}
-                          >
-                            {sending ? '…' : '📨 إرسال قالب فيسبوك'}
-                          </button>
+                        <WhatsAppComposer
+                          editingMsgId={editingMsgId}
+                          initialValue={editingMsgId ? activeThread.messages.find(m => m._id === editingMsgId)?.messageBody || '' : ''}
+                          sending={sending}
+                          recording={recording}
+                          savingEdit={savingEdit}
+                          broadcastMode={broadcastMode}
+                          selectedMetaTpl={selectedMetaTpl}
+                          onSendText={handleChatSend}
+                          onSendMeta={handleChatSendMetaTemplate}
+                          onBroadcastText={handleBroadcastText}
+                          onSendMedia={handleChatMedia}
+                          onBroadcastMedia={handleBroadcastMedia}
+                          onStartVoice={startVoiceRecording}
+                          onStopVoice={stopAndSendVoiceRecording}
+                          onCancelEdit={handleCancelEdit}
+                          onSaveEdit={handleSaveEdit}
+                          showAlert={showAlert}
+                        />
                         </div>
                       </div>
                     </div>
@@ -3178,6 +2977,190 @@ const CSS_GLOBAL = `
   user-select: text;
 }
 `
+
+/* ════ WhatsAppComposer (Internal Text State for Performance) ════ */
+const WhatsAppComposer = memo(({
+  editingMsgId,
+  initialValue,
+  sending,
+  recording,
+  savingEdit,
+  broadcastMode,
+  selectedMetaTpl,
+  onSendText,
+  onSendMeta,
+  onBroadcastText,
+  onSendMedia,
+  onBroadcastMedia,
+  onStartVoice,
+  onStopVoice,
+  onCancelEdit,
+  onSaveEdit,
+  showAlert
+}: any) => {
+  const [text, setText] = useState('')
+
+  // Sync internal text state when entering edit mode or changing thread
+  useEffect(() => {
+    setText(initialValue || '')
+  }, [editingMsgId, initialValue])
+
+  const handleCommit = async () => {
+    if (editingMsgId) {
+      await onSaveEdit(text)
+    } else if (broadcastMode) {
+      await onBroadcastText(text)
+      setText('')
+    } else {
+      await onSendText(text)
+      setText('')
+    }
+  }
+
+  const handleMetaCommit = async () => {
+    await onSendMeta(text)
+    setText('')
+  }
+
+  return (
+    <div style={{display: 'flex', gap: '12px', padding: '12px 16px', background: 'var(--wa-chat-header)'}}>
+      <div style={{flex: 1, display: 'flex', flexDirection: 'column' as const}}>
+        {editingMsgId ? (
+          <div style={{
+            padding: '8px 10px',
+            borderRadius: '8px',
+            background: 'rgba(59,130,246,0.1)',
+            border: '1px solid rgba(59,130,246,0.35)',
+            marginBottom: '6px',
+            fontSize: '11px',
+            color: '#60a5fa',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <span>✏️ وضع التعديل — ستُعدَّل الرسالة في السجل فقط (لن تُرسَل مجدداً)</span>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#f87171',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 700,
+                padding: '0 4px',
+              }}
+            >✕ إلغاء</button>
+          </div>
+        ) : null}
+        <div style={{position: 'relative', flex: 1}}>
+          <textarea
+            id="wa-composer-textarea"
+            style={{
+              ...S.textarea,
+              width: '100%',
+              minHeight: '72px',
+              border: editingMsgId ? '1px solid rgba(59,130,246,0.6)' : undefined,
+              paddingLeft: '42px',
+              boxSizing: 'border-box',
+            }}
+            placeholder={editingMsgId ? 'عدِّل نص الرسالة هنا…' : 'اكتب ردك هنا…'}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onContextMenu={(e) => e.stopPropagation()}
+            onPaste={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            title="لصق"
+            style={{
+              position: 'absolute', left: '8px', bottom: '10px', background: 'transparent',
+              border: '1px solid var(--wa-border)', borderRadius: '6px', color: 'var(--wa-muted)',
+              fontSize: '14px', cursor: 'pointer', padding: '3px 6px', lineHeight: 1,
+            }}
+            onClick={async () => {
+              try {
+                const clipText = await navigator.clipboard.readText()
+                setText(prev => prev + clipText)
+                document.getElementById('wa-composer-textarea')?.focus()
+              } catch {
+                showAlert('err', '⚠️ اسمح للمتصفح بالوصول إلى الحافظة')
+              }
+            }}
+          >📋</button>
+        </div>
+      </div>
+      <div style={{display: 'flex', flexDirection: 'column' as const, gap: '8px'}}>
+        <label
+          style={{
+            padding: '10px 14px', background: 'rgba(56,189,248,0.15)',
+            border: '1px solid rgba(56,189,248,0.35)', borderRadius: '10px',
+            cursor: sending ? 'not-allowed' : 'pointer', fontSize: '12px', textAlign: 'center' as const,
+          }}
+        >
+          📎 ملف
+          <input
+            type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            style={{display: 'none'}} disabled={sending}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) {
+                if (broadcastMode) onBroadcastMedia(f)
+                else onSendMedia(f)
+              }
+              e.target.value = ''
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          style={{
+            padding: '10px 14px', borderRadius: '10px', fontSize: '12px',
+            background: recording ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)',
+            border: recording ? '1px solid rgba(239,68,68,0.45)' : '1px solid rgba(245,158,11,0.45)',
+            color: recording ? '#f87171' : '#fbbf24',
+            cursor: sending ? 'not-allowed' : 'pointer',
+          }}
+          disabled={sending}
+          onClick={() => {
+            if (recording) onStopVoice()
+            else onStartVoice()
+          }}
+        >
+          {recording ? '⏹️' : '🎙️'}
+        </button>
+        <button
+          type="button"
+          style={{
+            ...S.sendBtn, marginTop: 0, padding: '12px 18px',
+            background: editingMsgId ? 'rgba(59,130,246,0.85)' : undefined,
+            opacity: sending || savingEdit ? 0.7 : 1,
+            cursor: sending || savingEdit ? 'not-allowed' : 'pointer',
+          }}
+          disabled={sending || savingEdit}
+          onClick={handleCommit}
+        >
+          {editingMsgId ? (savingEdit ? '⏳' : '💾') : (sending ? '…' : (broadcastMode ? '📣' : '📤'))}
+        </button>
+        <button
+          type="button"
+          style={{
+            padding: '12px 14px', borderRadius: '10px', fontWeight: 700, fontSize: '12px',
+            border: '1px solid rgba(59,130,246,0.45)', background: 'rgba(59,130,246,0.2)',
+            color: '#93c5fd',
+            opacity: !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 0.55 : 1,
+            cursor: !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 'not-allowed' : 'pointer',
+          }}
+          disabled={!!editingMsgId || sending || broadcastMode || !selectedMetaTpl}
+          onClick={handleMetaCommit}
+        >
+          📨
+        </button>
+      </div>
+    </div>
+  )
+})
 
 const S: Record<string, React.CSSProperties> = {
   root: {
