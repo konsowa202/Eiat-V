@@ -557,9 +557,13 @@ export function WhatsAppTool() {
   const [savingChatName, setSavingChatName] = useState(false)
   const [isUserTyping, setIsUserTyping] = useState(false)
   const [readEpoch, setReadEpoch] = useState(0)
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
+  const [editingMsgText, setEditingMsgText] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
   const sessionUnreadBaselineRef = useRef<Map<string, number>>(new Map())
   const lastFocusFetchAtRef = useRef(0)
   const chatScrollRef = useRef<HTMLDivElement>(null)
+  const isTypingRef = useRef(false)
   const newChatPhoneInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -725,15 +729,21 @@ export function WhatsAppTool() {
     }
   }, [fetchConversations, sending, recording, isUserTyping])
 
-  // Detect active typing to avoid disruptive refresh while composing.
+  // Detect active typing — optimised: only set state on transition to avoid per-keystroke re-renders.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const onInput = (ev: Event) => {
       const tag = ((ev.target as HTMLElement | null)?.tagName || '').toLowerCase()
       if (tag !== 'input' && tag !== 'textarea') return
-      setIsUserTyping(true)
+      if (!isTypingRef.current) {
+        isTypingRef.current = true
+        setIsUserTyping(true)
+      }
       clearTimeout(timer)
-      timer = setTimeout(() => setIsUserTyping(false), 1400)
+      timer = setTimeout(() => {
+        isTypingRef.current = false
+        setIsUserTyping(false)
+      }, 1400)
     }
     document.addEventListener('input', onInput, true)
     return () => {
@@ -1286,6 +1296,71 @@ export function WhatsAppTool() {
       showAlert('err', `❌ ${msg}`)
     } finally {
       setSavingChatName(false)
+    }
+  }
+
+  const handleDeleteMsg = async (msgId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذه الرسالة من السجل؟')) return
+    try {
+      await client.delete(msgId)
+      showAlert('ok', '✅ تم حذف الرسالة')
+      void fetchConversations()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'فشل الحذف'
+      showAlert('err', `❌ ${msg}`)
+    }
+  }
+
+  const handleCopyMsg = (text: string) => {
+    if (!text) return
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(
+        () => showAlert('ok', '✅ تم النسخ'),
+        () => showAlert('err', '❌ فشل النسخ')
+      )
+    } else {
+      // Fallback for older browsers
+      const el = document.createElement('textarea')
+      el.value = text
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      showAlert('ok', '✅ تم النسخ')
+    }
+  }
+
+  const handleStartEdit = (msgId: string, currentBody: string) => {
+    setEditingMsgId(msgId)
+    setEditingMsgText(currentBody)
+    // scroll composer into view
+    setTimeout(() => {
+      const el = document.getElementById('wa-composer-textarea')
+      el?.focus()
+    }, 80)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingMsgId(null)
+    setEditingMsgText('')
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingMsgId) return
+    const newBody = editingMsgText.trim()
+    if (!newBody) return showAlert('err', '⚠️ نص الرسالة لا يجوز أن يكون فارغاً')
+    setSavingEdit(true)
+    try {
+      await client.patch(editingMsgId).set({messageBody: newBody}).commit()
+      showAlert('ok', '✅ تم تعديل الرسالة')
+      setEditingMsgId(null)
+      setEditingMsgText('')
+      void fetchConversations()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'فشل التعديل'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -2235,115 +2310,199 @@ export function WhatsAppTool() {
                         const kind = c.messageKind || 'text'
                         const src = c.waMediaId ? mediaSrc(c.waMediaId) : ''
                         const displayBody = conversationMessageBodyForDisplay(c)
+                        const isBeingEdited = editingMsgId === c._id
                         return (
                           <div
                             key={c._id}
+                            className="wa-msg-row"
                             style={{
                               display: 'flex',
                               justifyContent: out ? 'flex-start' : 'flex-end',
+                              flexDirection: 'column',
+                              alignItems: out ? 'flex-start' : 'flex-end',
                             }}
                           >
                             <div
+                              className="wa-bubble-wrap"
                               style={{
+                                position: 'relative',
                                 maxWidth: 'min(92%, 420px)',
-                                borderRadius: '8px',
-                                padding: '8px 12px 6px',
-                                background: out ? 'var(--wa-bubble-out)' : 'var(--wa-bubble-in)',
-                                color: out ? 'var(--wa-bubble-out-text)' : 'var(--wa-bubble-in-text)',
-                                border: out
-                                  ? '1px solid rgba(0,0,0,0.04)'
-                                  : '1px solid var(--wa-border)',
-                                boxShadow: 'var(--wa-bubble-shadow)',
                               }}
                             >
-                              {c.waMediaId && kind === 'image' && (
-                                <img
-                                  src={src}
-                                  alt=""
+                              {/* Action bar — shown on hover */}
+                              <div className="wa-msg-actions" style={{
+                                position: 'absolute',
+                                top: '-30px',
+                                ...(out ? {left: 0} : {right: 0}),
+                                display: 'flex',
+                                gap: '4px',
+                                zIndex: 10,
+                                opacity: 0,
+                                transition: 'opacity 0.18s',
+                                pointerEvents: 'none',
+                              }}>
+                                <button
+                                  className="wa-action-btn"
+                                  title="نسخ"
+                                  onClick={() => handleCopyMsg(displayBody || '')}
                                   style={{
-                                    maxWidth: '100%',
-                                    borderRadius: '10px',
-                                    marginBottom: '8px',
-                                    display: 'block',
+                                    padding: '3px 9px',
+                                    borderRadius: '6px',
+                                    border: '1px solid var(--wa-border)',
+                                    background: 'var(--wa-elevated)',
+                                    color: 'var(--wa-text)',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap' as const,
+                                    fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
                                   }}
-                                />
-                              )}
-                              {c.waMediaId && kind === 'video' && (
-                                <video
-                                  src={src}
-                                  controls
+                                >📋 نسخ</button>
+                                {out && (
+                                  <button
+                                    className="wa-action-btn"
+                                    title="تعديل"
+                                    onClick={() => handleStartEdit(c._id, displayBody || c.messageBody || '')}
+                                    style={{
+                                      padding: '3px 9px',
+                                      borderRadius: '6px',
+                                      border: '1px solid rgba(59,130,246,0.4)',
+                                      background: 'rgba(59,130,246,0.14)',
+                                      color: '#60a5fa',
+                                      fontSize: '11px',
+                                      cursor: 'pointer',
+                                      whiteSpace: 'nowrap' as const,
+                                      fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
+                                    }}
+                                  >✏️ تعديل</button>
+                                )}
+                                <button
+                                  className="wa-action-btn"
+                                  title="حذف"
+                                  onClick={() => handleDeleteMsg(c._id)}
                                   style={{
-                                    maxWidth: '100%',
-                                    borderRadius: '10px',
-                                    marginBottom: '8px',
+                                    padding: '3px 9px',
+                                    borderRadius: '6px',
+                                    border: '1px solid rgba(239,68,68,0.4)',
+                                    background: 'rgba(239,68,68,0.12)',
+                                    color: '#f87171',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap' as const,
+                                    fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
                                   }}
-                                />
-                              )}
-                              {c.waMediaId && kind === 'audio' && (
-                                <audio
-                                  src={src}
-                                  controls
-                                  style={{width: '100%', marginBottom: '8px'}}
-                                />
-                              )}
-                              {c.waMediaId && kind === 'document' && (
-                                <a
-                                  href={src}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{
-                                    display: 'inline-block',
-                                    marginBottom: '8px',
-                                    color: 'var(--wa-brand)',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  📎 تحميل المستند
-                                </a>
-                              )}
-                              {displayBody && (
-                                <div
-                                  style={{
-                                    fontSize: '14.2px',
-                                    lineHeight: 1.5,
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word' as const,
-                                  }}
-                                >
-                                  {displayBody}
-                                </div>
-                              )}
-                              {c.status === 'failed' && c.errorMessage && (
-                                <div style={{fontSize: '11px', color: '#fca5a5', marginTop: '6px'}}>
-                                  {c.errorMessage}
-                                </div>
-                              )}
+                                >🗑️ حذف</button>
+                              </div>
                               <div
                                 style={{
-                                  fontSize: '11px',
-                                  color: 'var(--wa-muted)',
-                                  marginTop: '6px',
-                                  textAlign: 'left' as const,
-                                  direction: 'ltr' as const,
-                                  opacity: 0.95,
+                                  borderRadius: '8px',
+                                  padding: '8px 12px 6px',
+                                  background: isBeingEdited
+                                    ? 'rgba(59,130,246,0.22)'
+                                    : out ? 'var(--wa-bubble-out)' : 'var(--wa-bubble-in)',
+                                  color: out ? 'var(--wa-bubble-out-text)' : 'var(--wa-bubble-in-text)',
+                                  border: isBeingEdited
+                                    ? '1px solid rgba(59,130,246,0.55)'
+                                    : out
+                                    ? '1px solid rgba(0,0,0,0.04)'
+                                    : '1px solid var(--wa-border)',
+                                  boxShadow: 'var(--wa-bubble-shadow)',
+                                  transition: 'background 0.18s, border-color 0.18s',
                                 }}
                               >
-                                {c.sentAt
-                                  ? new Date(c.sentAt).toLocaleString('ar-SA', {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                      day: 'numeric',
-                                      month: 'short',
-                                    })
-                                  : ''}
-                                {out &&
-                                  (c.status === 'sent'
-                                    ? ' · ✓'
-                                    : c.status === 'delivered'
-                                      ? ' · ✓✓'
-                                      : c.status === 'read'
+                                {c.waMediaId && kind === 'image' && (
+                                  <img
+                                    src={src}
+                                    alt=""
+                                    style={{
+                                      maxWidth: '100%',
+                                      borderRadius: '10px',
+                                      marginBottom: '8px',
+                                      display: 'block',
+                                    }}
+                                  />
+                                )}
+                                {c.waMediaId && kind === 'video' && (
+                                  <video
+                                    src={src}
+                                    controls
+                                    style={{
+                                      maxWidth: '100%',
+                                      borderRadius: '10px',
+                                      marginBottom: '8px',
+                                    }}
+                                  />
+                                )}
+                                {c.waMediaId && kind === 'audio' && (
+                                  <audio
+                                    src={src}
+                                    controls
+                                    style={{width: '100%', marginBottom: '8px'}}
+                                  />
+                                )}
+                                {c.waMediaId && kind === 'document' && (
+                                  <a
+                                    href={src}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      display: 'inline-block',
+                                      marginBottom: '8px',
+                                      color: 'var(--wa-brand)',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    📎 تحميل المستند
+                                  </a>
+                                )}
+                                {displayBody && (
+                                  <div
+                                    style={{
+                                      fontSize: '14.2px',
+                                      lineHeight: 1.5,
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word' as const,
+                                      userSelect: 'text',
+                                      cursor: 'text',
+                                    }}
+                                  >
+                                    {displayBody}
+                                    {isBeingEdited && (
+                                      <span style={{marginRight: '6px', fontSize: '10px', color: '#93c5fd', fontStyle:'italic'}}>✏️ يُعدَّل الآن…</span>
+                                    )}
+                                  </div>
+                                )}
+                                {c.status === 'failed' && c.errorMessage && (
+                                  <div style={{fontSize: '11px', color: '#fca5a5', marginTop: '6px'}}>
+                                    {c.errorMessage}
+                                  </div>
+                                )}
+                                <div
+                                  style={{
+                                    fontSize: '11px',
+                                    color: 'var(--wa-muted)',
+                                    marginTop: '6px',
+                                    textAlign: 'left' as const,
+                                    direction: 'ltr' as const,
+                                    opacity: 0.95,
+                                  }}
+                                >
+                                  {c.sentAt
+                                    ? new Date(c.sentAt).toLocaleString('ar-SA', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        day: 'numeric',
+                                        month: 'short',
+                                      })
+                                    : ''}
+                                  {out &&
+                                    (c.status === 'sent'
+                                      ? ' · ✓'
+                                      : c.status === 'delivered'
                                         ? ' · ✓✓'
-                                        : '')}
+                                        : c.status === 'read'
+                                          ? ' · ✓✓'
+                                          : '')}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2598,11 +2757,51 @@ export function WhatsAppTool() {
                               )}
                             </div>
                           ) : null}
+                          {editingMsgId ? (
+                            <div style={{
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              background: 'rgba(59,130,246,0.1)',
+                              border: '1px solid rgba(59,130,246,0.35)',
+                              marginBottom: '6px',
+                              fontSize: '11px',
+                              color: '#60a5fa',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}>
+                              <span>✏️ وضع التعديل — ستُعدَّل الرسالة في السجل فقط (لن تُرسَل مجدداً)</span>
+                              <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#f87171',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  padding: '0 4px',
+                                }}
+                              >✕ إلغاء</button>
+                            </div>
+                          ) : null}
                           <textarea
-                            style={{...S.textarea, flex: 1, minHeight: '72px'}}
-                            placeholder="اكتب ردك هنا… (اختياري مع الميديا، أو رسالة إضافية للقوالب)"
-                            value={chatQuickMsg}
-                            onChange={(e) => setChatQuickMsg(e.target.value)}
+                            id="wa-composer-textarea"
+                            style={{
+                              ...S.textarea,
+                              flex: 1,
+                              minHeight: '72px',
+                              border: editingMsgId
+                                ? '1px solid rgba(59,130,246,0.6) !important'
+                                : undefined,
+                            }}
+                            placeholder={editingMsgId ? 'عدِّل نص الرسالة هنا…' : 'اكتب ردك هنا… (اختياري مع الميديا، أو رسالة إضافية للقوالب)'}
+                            value={editingMsgId ? editingMsgText : chatQuickMsg}
+                            onChange={(e) => {
+                              if (editingMsgId) setEditingMsgText(e.target.value)
+                              else setChatQuickMsg(e.target.value)
+                            }}
                           />
                         </div>
                         <div style={{display: 'flex', flexDirection: 'column' as const, gap: '8px'}}>
@@ -2656,23 +2855,41 @@ export function WhatsAppTool() {
                           >
                             {recording ? '⏹️ إيقاف وإرسال الصوت' : '🎙️ تسجيل صوت'}
                           </button>
-                          <button
-                            type="button"
-                            style={{
-                              ...S.sendBtn,
-                              marginTop: 0,
-                              padding: '12px 18px',
-                              opacity: sending ? 0.7 : 1,
-                              cursor: sending ? 'not-allowed' : 'pointer',
-                            }}
-                            disabled={sending}
-                            onClick={() => {
-                              if (broadcastMode) void handleBroadcastText()
-                              else void handleChatSend()
-                            }}
-                          >
-                            {sending ? '…' : broadcastMode ? '📣 إرسال جماعي' : '📤 إرسال نص'}
-                          </button>
+                          {editingMsgId ? (
+                            <button
+                              type="button"
+                              style={{
+                                ...S.sendBtn,
+                                marginTop: 0,
+                                padding: '12px 18px',
+                                background: 'rgba(59,130,246,0.85)',
+                                opacity: savingEdit ? 0.7 : 1,
+                                cursor: savingEdit ? 'not-allowed' : 'pointer',
+                              }}
+                              disabled={savingEdit}
+                              onClick={() => void handleSaveEdit()}
+                            >
+                              {savingEdit ? '⏳ جاري الحفظ…' : '💾 حفظ التعديل'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              style={{
+                                ...S.sendBtn,
+                                marginTop: 0,
+                                padding: '12px 18px',
+                                opacity: sending ? 0.7 : 1,
+                                cursor: sending ? 'not-allowed' : 'pointer',
+                              }}
+                              disabled={sending}
+                              onClick={() => {
+                                if (broadcastMode) void handleBroadcastText()
+                                else void handleChatSend()
+                              }}
+                            >
+                              {sending ? '…' : broadcastMode ? '📣 إرسال جماعي' : '📤 إرسال نص'}
+                            </button>
+                          )}
                           <button
                             type="button"
                             style={{
@@ -2685,11 +2902,11 @@ export function WhatsAppTool() {
                               fontWeight: 700,
                               fontSize: '12px',
                               fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
-                              opacity: sending || broadcastMode || !selectedMetaTpl ? 0.55 : 1,
+                              opacity: !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 0.55 : 1,
                               cursor:
-                                sending || broadcastMode || !selectedMetaTpl ? 'not-allowed' : 'pointer',
+                                !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 'not-allowed' : 'pointer',
                             }}
-                            disabled={sending || broadcastMode || !selectedMetaTpl}
+                            disabled={!!editingMsgId || sending || broadcastMode || !selectedMetaTpl}
                             onClick={() => void handleChatSendMetaTemplate()}
                           >
                             {sending ? '…' : '📨 إرسال قالب فيسبوك'}
@@ -2825,6 +3042,29 @@ const CSS_GLOBAL = `
 }
 .wa-inbox-root .wa-thread-item:not([data-active="true"]):hover {
   background: var(--wa-thread-hover) !important;
+}
+
+/* Message action bar — reveal on bubble hover */
+.wa-inbox-root .wa-msg-row { margin-bottom: 2px; }
+.wa-inbox-root .wa-bubble-wrap:hover .wa-msg-actions {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.wa-action-btn:hover {
+  filter: brightness(1.12);
+}
+
+/* Ensure text in bubbles is always selectable */
+.wa-inbox-root .wa-bubble-wrap {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Inputs/textareas: restore native right-click / paste behaviour */
+.wa-inbox-root input,
+.wa-inbox-root textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 `
 
