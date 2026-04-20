@@ -560,10 +560,18 @@ export function WhatsAppTool() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editingMsgText, setEditingMsgText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
+  const [longPressMenu, setLongPressMenu] = useState<{
+    msgId: string
+    body: string
+    isOut: boolean
+    x: number
+    y: number
+  } | null>(null)
   const sessionUnreadBaselineRef = useRef<Map<string, number>>(new Map())
   const lastFocusFetchAtRef = useRef(0)
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const isTypingRef = useRef(false)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const newChatPhoneInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -2292,6 +2300,101 @@ export function WhatsAppTool() {
                         {activeThread.sendPhone}
                       </div>
                     </div>
+                    {/* Long-press context menu */}
+                    {longPressMenu && (
+                      <div
+                        style={{
+                          position: 'fixed',
+                          top: longPressMenu.y,
+                          left: longPressMenu.x,
+                          zIndex: 9999,
+                          background: 'var(--wa-elevated)',
+                          border: '1px solid var(--wa-border)',
+                          borderRadius: '12px',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+                          padding: '6px',
+                          display: 'flex',
+                          flexDirection: 'column' as const,
+                          gap: '2px',
+                          minWidth: '130px',
+                          direction: 'rtl' as const,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          style={{
+                            width: '100%',
+                            padding: '9px 14px',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: '8px',
+                            color: 'var(--wa-text)',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textAlign: 'right' as const,
+                            fontFamily: "'Tajawal','Segoe UI',sans-serif",
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--wa-surface-2)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          onClick={() => { handleCopyMsg(longPressMenu.body); setLongPressMenu(null) }}
+                        >
+                          <span>📋</span> نسخ
+                        </button>
+                        {longPressMenu.isOut && (
+                          <button
+                            style={{
+                              width: '100%',
+                              padding: '9px 14px',
+                              background: 'transparent',
+                              border: 'none',
+                              borderRadius: '8px',
+                              color: '#60a5fa',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              textAlign: 'right' as const,
+                              fontFamily: "'Tajawal','Segoe UI',sans-serif",
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59,130,246,0.1)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            onClick={() => { handleStartEdit(longPressMenu.msgId, longPressMenu.body); setLongPressMenu(null) }}
+                          >
+                            <span>✏️</span> تعديل
+                          </button>
+                        )}
+                        <div style={{height: '1px', background: 'var(--wa-border)', margin: '2px 6px'}} />
+                        <button
+                          style={{
+                            width: '100%',
+                            padding: '9px 14px',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: '8px',
+                            color: '#f87171',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textAlign: 'right' as const,
+                            fontFamily: "'Tajawal','Segoe UI',sans-serif",
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          onClick={() => { void handleDeleteMsg(longPressMenu.msgId); setLongPressMenu(null) }}
+                        >
+                          <span>🗑️</span> حذف
+                        </button>
+                      </div>
+                    )}
                     <div
                       ref={chatScrollRef}
                       className="wa-msg-scroll"
@@ -2301,9 +2404,10 @@ export function WhatsAppTool() {
                         padding: '16px 14px 20px',
                         display: 'flex',
                         flexDirection: 'column' as const,
-                        gap: '8px',
+                        gap: '6px',
                         maxHeight: '54vh',
                       }}
+                      onClick={() => setLongPressMenu(null)}
                     >
                       {activeThread.messages.map((c) => {
                         const out = c.direction === 'outgoing'
@@ -2320,6 +2424,8 @@ export function WhatsAppTool() {
                               justifyContent: out ? 'flex-start' : 'flex-end',
                               flexDirection: 'column',
                               alignItems: out ? 'flex-start' : 'flex-end',
+                              paddingTop: '4px',
+                              paddingBottom: '4px',
                             }}
                           >
                             <div
@@ -2327,71 +2433,31 @@ export function WhatsAppTool() {
                               style={{
                                 position: 'relative',
                                 maxWidth: 'min(92%, 420px)',
+                                cursor: 'pointer',
                               }}
+                              onMouseDown={(e) => {
+                                const body = displayBody || c.messageBody || ''
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                longPressTimerRef.current = setTimeout(() => {
+                                  const menuX = Math.min(e.clientX, window.innerWidth - 160)
+                                  const menuY = Math.min(e.clientY + 8, window.innerHeight - 160)
+                                  setLongPressMenu({msgId: c._id, body, isOut: out, x: menuX, y: menuY})
+                                }, 500)
+                              }}
+                              onMouseUp={() => clearTimeout(longPressTimerRef.current)}
+                              onMouseLeave={() => clearTimeout(longPressTimerRef.current)}
+                              onTouchStart={(e) => {
+                                const body = displayBody || c.messageBody || ''
+                                const touch = e.touches[0]
+                                longPressTimerRef.current = setTimeout(() => {
+                                  const menuX = Math.min(touch.clientX, window.innerWidth - 160)
+                                  const menuY = Math.min(touch.clientY + 8, window.innerHeight - 160)
+                                  setLongPressMenu({msgId: c._id, body, isOut: out, x: menuX, y: menuY})
+                                }, 500)
+                              }}
+                              onTouchEnd={() => clearTimeout(longPressTimerRef.current)}
+                              onTouchMove={() => clearTimeout(longPressTimerRef.current)}
                             >
-                              {/* Action bar — shown on hover */}
-                              <div className="wa-msg-actions" style={{
-                                position: 'absolute',
-                                top: '-30px',
-                                ...(out ? {left: 0} : {right: 0}),
-                                display: 'flex',
-                                gap: '4px',
-                                zIndex: 10,
-                                opacity: 0,
-                                transition: 'opacity 0.18s',
-                                pointerEvents: 'none',
-                              }}>
-                                <button
-                                  className="wa-action-btn"
-                                  title="نسخ"
-                                  onClick={() => handleCopyMsg(displayBody || '')}
-                                  style={{
-                                    padding: '3px 9px',
-                                    borderRadius: '6px',
-                                    border: '1px solid var(--wa-border)',
-                                    background: 'var(--wa-elevated)',
-                                    color: 'var(--wa-text)',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap' as const,
-                                    fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
-                                  }}
-                                >📋 نسخ</button>
-                                {out && (
-                                  <button
-                                    className="wa-action-btn"
-                                    title="تعديل"
-                                    onClick={() => handleStartEdit(c._id, displayBody || c.messageBody || '')}
-                                    style={{
-                                      padding: '3px 9px',
-                                      borderRadius: '6px',
-                                      border: '1px solid rgba(59,130,246,0.4)',
-                                      background: 'rgba(59,130,246,0.14)',
-                                      color: '#60a5fa',
-                                      fontSize: '11px',
-                                      cursor: 'pointer',
-                                      whiteSpace: 'nowrap' as const,
-                                      fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
-                                    }}
-                                  >✏️ تعديل</button>
-                                )}
-                                <button
-                                  className="wa-action-btn"
-                                  title="حذف"
-                                  onClick={() => handleDeleteMsg(c._id)}
-                                  style={{
-                                    padding: '3px 9px',
-                                    borderRadius: '6px',
-                                    border: '1px solid rgba(239,68,68,0.4)',
-                                    background: 'rgba(239,68,68,0.12)',
-                                    color: '#f87171',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap' as const,
-                                    fontFamily: "'Tajawal', 'Segoe UI', sans-serif",
-                                  }}
-                                >🗑️ حذف</button>
-                              </div>
                               <div
                                 style={{
                                   borderRadius: '8px',
@@ -2786,23 +2852,68 @@ export function WhatsAppTool() {
                               >✕ إلغاء</button>
                             </div>
                           ) : null}
-                          <textarea
-                            id="wa-composer-textarea"
-                            style={{
-                              ...S.textarea,
-                              flex: 1,
-                              minHeight: '72px',
-                              border: editingMsgId
-                                ? '1px solid rgba(59,130,246,0.6) !important'
-                                : undefined,
-                            }}
-                            placeholder={editingMsgId ? 'عدِّل نص الرسالة هنا…' : 'اكتب ردك هنا… (اختياري مع الميديا، أو رسالة إضافية للقوالب)'}
-                            value={editingMsgId ? editingMsgText : chatQuickMsg}
-                            onChange={(e) => {
-                              if (editingMsgId) setEditingMsgText(e.target.value)
-                              else setChatQuickMsg(e.target.value)
-                            }}
-                          />
+                          <div style={{position: 'relative', flex: 1}}>
+                            <textarea
+                              id="wa-composer-textarea"
+                              style={{
+                                ...S.textarea,
+                                width: '100%',
+                                minHeight: '72px',
+                                border: editingMsgId
+                                  ? '1px solid rgba(59,130,246,0.6)'
+                                  : undefined,
+                                paddingLeft: '42px',
+                                boxSizing: 'border-box',
+                              }}
+                              placeholder={editingMsgId ? 'عدِّل نص الرسالة هنا…' : 'اكتب ردك هنا…'}
+                              value={editingMsgId ? editingMsgText : chatQuickMsg}
+                              onChange={(e) => {
+                                if (editingMsgId) setEditingMsgText(e.target.value)
+                                else setChatQuickMsg(e.target.value)
+                              }}
+                              onContextMenu={(e) => {
+                                // Allow native context menu (paste etc.)
+                                e.stopPropagation()
+                              }}
+                            />
+                            {/* Paste button */}
+                            <button
+                              type="button"
+                              title="لصق"
+                              style={{
+                                position: 'absolute',
+                                left: '8px',
+                                bottom: '10px',
+                                background: 'transparent',
+                                border: '1px solid var(--wa-border)',
+                                borderRadius: '6px',
+                                color: 'var(--wa-muted)',
+                                fontSize: '14px',
+                                cursor: 'pointer',
+                                padding: '3px 6px',
+                                lineHeight: 1,
+                                transition: 'color 0.15s, border-color 0.15s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--wa-brand)'
+                                e.currentTarget.style.borderColor = 'var(--wa-brand)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--wa-muted)'
+                                e.currentTarget.style.borderColor = 'var(--wa-border)'
+                              }}
+                              onClick={async () => {
+                                try {
+                                  const text = await navigator.clipboard.readText()
+                                  if (editingMsgId) setEditingMsgText(prev => prev + text)
+                                  else setChatQuickMsg(prev => prev + text)
+                                  document.getElementById('wa-composer-textarea')?.focus()
+                                } catch {
+                                  showAlert('err', '⚠️ اسمح للمتصفح بالوصول إلى الحافظة')
+                                }
+                              }}
+                            >📋</button>
+                          </div>
                         </div>
                         <div style={{display: 'flex', flexDirection: 'column' as const, gap: '8px'}}>
                           <label
@@ -3044,20 +3155,16 @@ const CSS_GLOBAL = `
   background: var(--wa-thread-hover) !important;
 }
 
-/* Message action bar — reveal on bubble hover */
-.wa-inbox-root .wa-msg-row { margin-bottom: 2px; }
-.wa-inbox-root .wa-bubble-wrap:hover .wa-msg-actions {
-  opacity: 1 !important;
-  pointer-events: auto !important;
-}
-.wa-action-btn:hover {
-  filter: brightness(1.12);
-}
+/* Message rows — proper spacing like WhatsApp */
+.wa-inbox-root .wa-msg-row { padding: 3px 0; }
 
-/* Ensure text in bubbles is always selectable */
+/* Bubble: allow text selection, show pointer on hover */
 .wa-inbox-root .wa-bubble-wrap {
   user-select: text;
   -webkit-user-select: text;
+}
+.wa-inbox-root .wa-bubble-wrap:active {
+  opacity: 0.82;
 }
 
 /* Inputs/textareas: restore native right-click / paste behaviour */
