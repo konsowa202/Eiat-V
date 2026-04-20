@@ -2875,6 +2875,10 @@ export function WhatsAppTool() {
                                 // Allow native context menu (paste etc.)
                                 e.stopPropagation()
                               }}
+                              onPaste={(e) => {
+                                // Prevent framework interception of native paste
+                                e.stopPropagation()
+                              }}
                             />
                             {/* Paste button */}
                             <button
