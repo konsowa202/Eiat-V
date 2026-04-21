@@ -23,25 +23,28 @@ interface Case {
   _id: string;
   title: string;
   category: string;
+  /** صورة واحدة: قبل وبعد في نفس التصميم (مُفضّل من التصميم) */
+  caseImage?: SanityImageSource | null;
   beforeImage: SanityImageSource | null;
   afterImage: SanityImageSource | null;
   description?: string;
   treatmentDuration?: string;
 }
 
-type CaseWithImages = Case & {
-  beforeImage: SanityImageSource;
-  afterImage: SanityImageSource;
-};
+type CaseWithImages = Case & (
+  | { caseImage: SanityImageSource; beforeImage?: null; afterImage?: null }
+  | { beforeImage: SanityImageSource; afterImage: SanityImageSource }
+);
 
-function caseHasBothImages(c: Case): c is CaseWithImages {
+function caseHasDisplayableImages(c: Case): c is CaseWithImages {
+  if (isSanityImageSource(c.caseImage)) return true;
   return isSanityImageSource(c.beforeImage) && isSanityImageSource(c.afterImage);
 }
 
 export default function BeforeAfterSection({ cases = [] }: { cases?: Case[] }) {
   const [activeTab, setActiveTab] = useState("all");
 
-  const casesWithImages = (cases ?? []).filter(caseHasBothImages);
+  const casesWithImages = (cases ?? []).filter(caseHasDisplayableImages);
 
   // If no cases with both images exist, don't show the section
   if (casesWithImages.length === 0) {
@@ -117,29 +120,38 @@ export default function BeforeAfterSection({ cases = [] }: { cases?: Case[] }) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 flex flex-col gap-4">
-                      {/* Before & After Image Comparison Layout */}
-                      <div className="grid grid-cols-2 gap-2 aspect-square relative">
-                        <div className="relative overflow-hidden rounded-lg group">
+                      {isSanityImageSource(item.caseImage) ? (
+                        <div className="relative w-full overflow-hidden rounded-xl bg-gray-50 group">
                           <img
-                            src={urlFor(item.beforeImage).width(600).height(600).url()}
-                            alt="Before"
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            src={urlFor(item.caseImage).width(1400).url()}
+                            alt={item.title ? `قبل وبعد — ${item.title}` : "قبل وبعد"}
+                            className="w-full h-auto object-contain object-center transition-transform duration-500 group-hover:scale-[1.02]"
                           />
-                          <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md font-bold">
-                            قبل
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 aspect-square relative">
+                          <div className="relative overflow-hidden rounded-lg group">
+                            <img
+                              src={urlFor(item.beforeImage).width(600).height(600).url()}
+                              alt="قبل"
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            />
+                            <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md font-bold">
+                              قبل
+                            </div>
+                          </div>
+                          <div className="relative overflow-hidden rounded-lg group">
+                            <img
+                              src={urlFor(item.afterImage).width(600).height(600).url()}
+                              alt="بعد"
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            />
+                            <div className="absolute top-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded-md font-bold">
+                              بعد
+                            </div>
                           </div>
                         </div>
-                        <div className="relative overflow-hidden rounded-lg group">
-                          <img
-                            src={urlFor(item.afterImage).width(600).height(600).url()}
-                            alt="After"
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                          />
-                          <div className="absolute top-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded-md font-bold">
-                            بعد
-                          </div>
-                        </div>
-                      </div>
+                      )}
                       
                       {item.description && (
                         <p className="text-sm text-gray-600 line-clamp-2 text-center mt-2">

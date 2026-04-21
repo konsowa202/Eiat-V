@@ -34,6 +34,7 @@ async function getBeforeAfterCases() {
     _id,
     title,
     category,
+    caseImage,
     beforeImage,
     afterImage,
     description,
