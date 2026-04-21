@@ -52,11 +52,15 @@ else
     cd eiat
 fi
 
-# Create .env file if it doesn't exist
+# Create .env file if it doesn't exist (landing-page only — Studio is deployed to Vercel separately)
 if [ ! -f "packages/eiat-site/.env" ]; then
     echo "📝 Creating .env file..."
     cat > packages/eiat-site/.env << EOF
+NEXT_PUBLIC_SANITY_PROJECT_ID=f46widyg
+NEXT_PUBLIC_SANITY_DATASET=production
 SANITY_TOKEN=sklM1PFIoMYkoolRlynCkgNgOp1YTF2OGOBRL0P1mKieYiHCfNNTRc7fL13NufBospyOWiCMtjspAHA9P5WE2ca8TMd6egKx4nzW71HrS3Tau73ks81gQJlD3WFb2bqCJ5TsEgXUQAOvOpcnu95HjyeD1qUbR43GMY4m3QaraNIQYpLn3kWT
+EMAIL_USER=Eiatclinicad@gmail.com
+EMAIL_PASS=xhja bebi hicg khkc
 NODE_ENV=production
 EOF
 fi

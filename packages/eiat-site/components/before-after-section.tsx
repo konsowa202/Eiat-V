@@ -8,7 +8,7 @@ import "swiper/css/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TextAnimate } from "./magicui/text-animate";
 import { cn } from "@/lib/utils";
-import { urlFor } from "@/lib/sanityImage";
+import { isSanityImageSource, urlFor } from "@/lib/sanityImage";
 import { SanityImageSource } from "@sanity/image-url/lib/types/types";
 
 const TABS = [
@@ -23,24 +23,35 @@ interface Case {
   _id: string;
   title: string;
   category: string;
-  beforeImage: SanityImageSource;
-  afterImage: SanityImageSource;
+  beforeImage: SanityImageSource | null;
+  afterImage: SanityImageSource | null;
   description?: string;
   treatmentDuration?: string;
+}
+
+type CaseWithImages = Case & {
+  beforeImage: SanityImageSource;
+  afterImage: SanityImageSource;
+};
+
+function caseHasBothImages(c: Case): c is CaseWithImages {
+  return isSanityImageSource(c.beforeImage) && isSanityImageSource(c.afterImage);
 }
 
 export default function BeforeAfterSection({ cases = [] }: { cases?: Case[] }) {
   const [activeTab, setActiveTab] = useState("all");
 
-  // If no cases exist at all, don't show the section
-  if (!cases || cases.length === 0) {
+  const casesWithImages = (cases ?? []).filter(caseHasBothImages);
+
+  // If no cases with both images exist, don't show the section
+  if (casesWithImages.length === 0) {
     return null;
   }
 
   const filteredCases =
     activeTab === "all"
-      ? cases
-      : cases.filter((item) => item.category === activeTab);
+      ? casesWithImages
+      : casesWithImages.filter((item) => item.category === activeTab);
 
   return (
     <section className="py-20 bg-white overflow-hidden" id="before-after">

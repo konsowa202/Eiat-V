@@ -1,10 +1,12 @@
-/// <reference types="vite/client" />
-
+/**
+ * Optional env used by the Sanity Studio plugin (WhatsAppTool) at runtime in the browser.
+ * Kept for back-compat with older Studio/Vite builds; in Next.js the Studio lives at `/`
+ * and the API routes live on the same origin so this variable is normally not needed.
+ */
 interface ImportMetaEnv {
-  /** Origin of Next.js app (no trailing slash), e.g. https://eiat-v.vercel.app — for WhatsApp /api when Studio is not on same host */
-  readonly SANITY_STUDIO_WA_SITE_ORIGIN?: string
+  readonly SANITY_STUDIO_WA_SITE_ORIGIN?: string;
 }
 
 interface ImportMeta {
-  readonly env: ImportMetaEnv
+  readonly env: ImportMetaEnv;
 }

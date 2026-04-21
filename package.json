@@ -3,11 +3,10 @@
   "private": true,
   "packageManager": "pnpm@9.15.9",
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   },
   "workspaces": [
     "packages/eiat-site",
-    "packages/eiat-dashboard",
     "packages/sanity-studio"
   ],
   "scripts": {

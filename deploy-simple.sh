@@ -44,21 +44,25 @@ else
     cd eiat
 fi
 
-# Create .env file
+# Create .env file (landing-page only — Sanity read token + email for contact form)
 echo "📝 Creating .env file..."
 cat > packages/eiat-site/.env << EOF
+NEXT_PUBLIC_SANITY_PROJECT_ID=f46widyg
+NEXT_PUBLIC_SANITY_DATASET=production
 SANITY_TOKEN=sklM1PFIoMYkoolRlynCkgNgOp1YTF2OGOBRL0P1mKieYiHCfNNTRc7fL13NufBospyOWiCMtjspAHA9P5WE2ca8TMd6egKx4nzW71HrS3Tau73ks81gQJlD3WFb2bqCJ5TsEgXUQAOvOpcnu95HjyeD1qUbR43GMY4m3QaraNIQYpLn3kWT
+EMAIL_USER=Eiatclinicad@gmail.com
+EMAIL_PASS=xhja bebi hicg khkc
 NODE_ENV=production
 EOF
 
-# Install dependencies
+# Install dependencies (only the eiat-site workspace — Studio is deployed separately on Vercel)
 echo "📦 Installing dependencies..."
 cd /var/www/eiat
-pnpm install
+pnpm install --filter eiat...
 
 # Build the application
 echo "🏗️ Building application..."
-cd /var/www/eiat
+cd /var/www/eiat/packages/eiat-site
 pnpm build
 
 # Stop existing PM2 process if running
