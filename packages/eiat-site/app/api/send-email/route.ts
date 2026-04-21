@@ -25,11 +25,25 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   const { name, email, message } = await req.json();
 
+  const user = (process.env.EMAIL_USER || "").trim();
+  const pass = (process.env.EMAIL_PASS || "").trim();
+  if (!user || !pass) {
+    console.error("send-email: EMAIL_USER and EMAIL_PASS must be set in the deployment environment (e.g. .env on VPS, Vercel env vars).");
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "تعذّر إرسال البريد: إعدادات البريد غير مضبوطة على السيرفر (EMAIL_USER / EMAIL_PASS).",
+      },
+      { status: 503 }
+    );
+  }
+
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user,
+      pass,
     },
     tls: {
       rejectUnauthorized: false, // 👈 this ignores invalid/self-signed certs
@@ -38,7 +52,7 @@ export async function POST(req: Request) {
 
   const mailOptions = {
     from: email,
-    to: process.env.EMAIL_USER,
+    to: user,
     subject: `New message from ${name}`,
     text: message,
   };
