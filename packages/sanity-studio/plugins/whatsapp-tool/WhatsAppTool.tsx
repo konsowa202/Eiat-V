@@ -669,7 +669,9 @@ export function WhatsAppTool() {
     // Global Defaults for specific templates
     if (t.name === 'eiat' || t.name === 'eiat1') {
       if (t.headerFormat === 'IMAGE') {
-        defaultHeader = 'https://eiat-v.vercel.app/wa-logo.jpg'
+        // Same file: packages/sanity-studio/public/wa-logo.jpg → served at /wa-logo.jpg on this deploy
+        const origin = (typeof window !== 'undefined' ? getWaSiteOrigin() : '') || DEFAULT_WA_SITE_ORIGIN
+        defaultHeader = `${origin.replace(/\/$/, '')}/wa-logo.jpg`
       }
       // No body params to fill if count is 0
     }
