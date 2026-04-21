@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Navigation } from "swiper/modules";
 import "swiper/css";
@@ -31,12 +32,7 @@ interface Case {
   treatmentDuration?: string;
 }
 
-type CaseWithImages = Case & (
-  | { caseImage: SanityImageSource; beforeImage?: null; afterImage?: null }
-  | { beforeImage: SanityImageSource; afterImage: SanityImageSource }
-);
-
-function caseHasDisplayableImages(c: Case): c is CaseWithImages {
+function caseHasDisplayableImages(c: Case): boolean {
   if (isSanityImageSource(c.caseImage)) return true;
   return isSanityImageSource(c.beforeImage) && isSanityImageSource(c.afterImage);
 }
@@ -44,7 +40,7 @@ function caseHasDisplayableImages(c: Case): c is CaseWithImages {
 export default function BeforeAfterSection({ cases = [] }: { cases?: Case[] }) {
   const [activeTab, setActiveTab] = useState("all");
 
-  const casesWithImages = (cases ?? []).filter(caseHasDisplayableImages);
+  const casesWithImages: Case[] = (cases ?? []).filter(caseHasDisplayableImages);
 
   // If no cases with both images exist, don't show the section
   if (casesWithImages.length === 0) {
@@ -122,36 +118,52 @@ export default function BeforeAfterSection({ cases = [] }: { cases?: Case[] }) {
                     <CardContent className="p-4 flex flex-col gap-4">
                       {isSanityImageSource(item.caseImage) ? (
                         <div className="relative w-full overflow-hidden rounded-xl bg-gray-50 group">
-                          <img
+                          <Image
                             src={urlFor(item.caseImage).width(1400).url()}
+                            width={1400}
+                            height={1000}
                             alt={item.title ? `قبل وبعد — ${item.title}` : "قبل وبعد"}
-                            className="w-full h-auto object-contain object-center transition-transform duration-500 group-hover:scale-[1.02]"
+                            className="h-auto w-full object-contain object-center transition-transform duration-500 group-hover:scale-[1.02]"
+                            sizes="(max-width: 768px) 100vw, 80vw"
                           />
                         </div>
-                      ) : (
+                      ) : (() => {
+                          const before = item.beforeImage;
+                          const after = item.afterImage;
+                          if (!isSanityImageSource(before) || !isSanityImageSource(after)) {
+                            return null;
+                          }
+                          const beforeUrl = urlFor(before).width(600).height(600).url();
+                          const afterUrl = urlFor(after).width(600).height(600).url();
+                          return (
                         <div className="grid grid-cols-2 gap-2 aspect-square relative">
                           <div className="relative overflow-hidden rounded-lg group">
-                            <img
-                              src={urlFor(item.beforeImage).width(600).height(600).url()}
+                            <Image
+                              src={beforeUrl}
+                              width={600}
+                              height={600}
                               alt="قبل"
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                             />
                             <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md font-bold">
                               قبل
                             </div>
                           </div>
                           <div className="relative overflow-hidden rounded-lg group">
-                            <img
-                              src={urlFor(item.afterImage).width(600).height(600).url()}
+                            <Image
+                              src={afterUrl}
+                              width={600}
+                              height={600}
                               alt="بعد"
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                             />
                             <div className="absolute top-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded-md font-bold">
                               بعد
                             </div>
                           </div>
                         </div>
-                      )}
+                          );
+                        })()}
                       
                       {item.description && (
                         <p className="text-sm text-gray-600 line-clamp-2 text-center mt-2">
