@@ -368,7 +368,41 @@ function buildThreads(list: ConversationDoc[]): WaThread[] {
 }
 
 function mediaSrc(waMediaId: string): string {
-  return waApiAbs(`/api/whatsapp/media?mediaId=${encodeURIComponent(waMediaId)}`)
+  return waApiAbs(`/api/whatsapp/media/${encodeURIComponent(waMediaId)}`)
+}
+
+/** Clickable https links inside bubble text (maps, clinic links, etc.). */
+function messageTextWithLinks(text: string, linkColor: string): React.ReactNode {
+  const re = /https?:\/\/[^\s<>\u0000-\u001f\u200c-\u200f]+/gi
+  const nodes: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index))
+    const raw = m[0]
+    const url = raw.replace(/[.,;:!?)]+$/u, '')
+    nodes.push(
+      <a
+        key={`u-${m.index}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{color: linkColor, wordBreak: 'break-all' as const, textDecoration: 'underline'}}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>,
+    )
+    last = m.index + raw.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return <>{nodes}</>
+}
+
+function documentDownloadName(messageBody: string | undefined): string | undefined {
+  const m = (messageBody || '').match(/^\[مستند\]\s*(.+)$/u)
+  const name = m?.[1]?.trim()
+  return name && name.length <= 200 ? name : undefined
 }
 
 async function parseApiResponse(res: Response): Promise<{success: boolean; error?: string; [k: string]: unknown}> {
@@ -2641,6 +2675,13 @@ export function WhatsAppTool() {
                         const src = c.waMediaId ? mediaSrc(c.waMediaId) : ''
                         const displayBody = conversationMessageBodyForDisplay(c)
                         const isBeingEdited = editingMsgId === c._id
+                        const linkCol = isLight ? '#0a6ebd' : out ? '#7dd3fc' : '#60a5fa'
+                        const tplUsed = (c.templateUsed || '').trim().toLowerCase()
+                        const showTemplateChrome =
+                          out &&
+                          tplUsed === 'confirmation' &&
+                          Boolean((displayBody || '').includes('تأكيد موعد'))
+                        const docName = documentDownloadName(c.messageBody)
                         return (
                           <div
                             key={c._id}
@@ -2736,15 +2777,44 @@ export function WhatsAppTool() {
                                     href={src}
                                     target="_blank"
                                     rel="noreferrer"
+                                    download={docName}
                                     style={{
                                       display: 'inline-block',
                                       marginBottom: '8px',
                                       color: 'var(--wa-brand)',
                                       fontWeight: 600,
                                     }}
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     📎 تحميل المستند
                                   </a>
+                                )}
+                                {showTemplateChrome && (
+                                  <div
+                                    style={{
+                                      marginBottom: '10px',
+                                      paddingBottom: '8px',
+                                      borderBottom: isLight
+                                        ? '1px solid rgba(17,27,33,0.12)'
+                                        : '1px solid rgba(255,255,255,0.12)',
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        opacity: 0.95,
+                                        marginBottom: '4px',
+                                        letterSpacing: '0.02em',
+                                      }}
+                                    >
+                                      📱 قالب واتساب معتمد · تأكيد موعد
+                                    </div>
+                                    <div style={{fontSize: '10px', lineHeight: 1.45, opacity: 0.78}}>
+                                      المعاينة هنا تعرض البيانات المُرسلة مع القالب. الأزرار والهيدر والتنسيق
+                                      الكامل يظهر للعميل داخل تطبيق واتساب فقط (حسب إعداد القالب في Meta).
+                                    </div>
+                                  </div>
                                 )}
                                 {displayBody && (
                                   <div
@@ -2757,7 +2827,7 @@ export function WhatsAppTool() {
                                       cursor: 'text',
                                     }}
                                   >
-                                    {displayBody}
+                                    {messageTextWithLinks(displayBody, linkCol)}
                                     {isBeingEdited && (
                                       <span style={{marginRight: '6px', fontSize: '10px', color: '#93c5fd', fontStyle:'italic'}}>✏️ يُعدَّل الآن…</span>
                                     )}
