@@ -92,6 +92,27 @@ function fillMetaBodyPlaceholders(bodyText: string, values: string[]): string {
   return out.trim() || (bodyText || '').trim()
 }
 
+/** Dashboard / Sanity bubble text when Meta `bodyText` is empty but we have parameter values. */
+function formatMetaTemplateSanityPreviewForChat(t: MetaWaTemplateRow, values: string[]): string {
+  const v = values.map((x) => String(x ?? '').trim())
+  if (t.name === 'confirmation' && v.length > 0) {
+    const a = v[0] ?? '—'
+    const b = v[1] ?? '—'
+    const c = v[2] ?? '—'
+    const d = v[3] ?? '—'
+    const lines = [
+      '✅ تأكيد موعد (قالب واتساب)',
+      `👤 العميل: ${a}`,
+      `🕐 الموعد: ${b}`,
+      `🩺 الخدمة: ${c}`,
+    ]
+    if (d && d !== '—') lines.push(`🔖 مرجع التأكيد: ${d}`)
+    return lines.join('\n')
+  }
+  if (v.length === 0) return `قالب واتساب: ${t.name}`
+  return [`📱 قالب ${t.name}`, ...v.map((x, i) => `${i + 1}. ${x}`)].join('\n')
+}
+
 /**
  * Meta often mirrors the Business Suite *label* in `components[].text` (e.g. template `open` → "Re-engagement message").
  * The Cloud API still sends `type: "template"` with `name: "open"` — this only fixes Studio/Sanity preview text.
@@ -1049,9 +1070,12 @@ export function WhatsAppTool() {
     const filledRaw = fillMetaBodyPlaceholders(t.bodyText, metaParamValues).trim()
     const filledBody = metaSanityPreviewBody(t.name, filledRaw)
     const extra = (customText ?? '').trim()
+    const fromParams =
+      t.bodyVariableCount > 0 ? formatMetaTemplateSanityPreviewForChat(t, metaParamValues) : ''
     // Some gateways / older deploys reject empty `message`; zero-var templates often have no bodyText in fallback rows.
     const messageBodyForSanity =
       [filledBody, extra].filter(Boolean).join('\n\n').trim() ||
+      fromParams ||
       (metaSanityPreviewBody(t.name, (t.bodyText || '').trim()) || '').trim() ||
       META_TEMPLATE_AR_PREVIEW[t.name]?.trim() ||
       `قالب واتساب: ${t.name}`

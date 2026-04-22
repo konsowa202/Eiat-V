@@ -64,11 +64,43 @@ function normalizeMetaSanityMessagePreview(graphTemplateName: string, messageTri
     .split(/\n\s*\n/)
     .map((para) =>
       para
-        .split(/\n/)
+        .split("\n")
         .map((line) => (OPEN_EN_LABEL_LINE.test(line) ? ar : line))
         .join("\n"),
     )
     .join("\n\n");
+}
+
+/** Client often sends only `قالب واتساب: {name}` when Meta body text is not cached — treat as stub. */
+function isMetaTemplateStubSanityPreview(graphTemplateName: string, body: string): boolean {
+  const b = (body || "").trim();
+  if (!b) return true;
+  const escaped = graphTemplateName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`^قالب\\s*واتساب\\s*:\\s*${escaped}\\s*$`, "iu").test(b)) return true;
+  if (/^قالب\s*واتساب\s*:\s*[\w-]+\s*$/iu.test(b)) return true;
+  return false;
+}
+
+/** Readable text for the dashboard / Sanity log (not sent to Meta — template handles that). */
+function formatMetaTemplateSanityBody(graphTemplateName: string, params: string[]): string {
+  const vals = params.map((v) => String(v ?? "").trim());
+  const gn = graphTemplateName.trim().toLowerCase();
+  if (gn === "confirmation" && vals.length > 0) {
+    const a = vals[0] ?? "—";
+    const b = vals[1] ?? "—";
+    const c = vals[2] ?? "—";
+    const d = vals[3] ?? "—";
+    const lines = [
+      "✅ تأكيد موعد (قالب واتساب)",
+      `👤 العميل: ${a}`,
+      `🕐 الموعد: ${b}`,
+      `🩺 الخدمة: ${c}`,
+    ];
+    if (d && d !== "—") lines.push(`🔖 مرجع التأكيد: ${d}`);
+    return lines.join("\n");
+  }
+  if (vals.length === 0) return `قالب واتساب: ${graphTemplateName}`;
+  return [`📱 قالب ${graphTemplateName}`, ...vals.map((v, i) => `${i + 1}. ${v}`)].join("\n");
 }
 
 function normalizeWaNumber(raw: string): string {
@@ -313,23 +345,35 @@ export async function POST(req: NextRequest) {
           : "";
 
     const previewText = (message || "").trim();
-    const previewForSanity =
-      metaTemplate?.name?.trim()
-        ? normalizeMetaSanityMessagePreview(metaTemplate.name.trim(), previewText)
-        : previewText;
-    const outgoingBody =
-      metaTemplate?.name?.trim()
-        ? previewForSanity || `قالب واتساب: ${metaTemplate.name}`
-        : config
-          ? previewText || `[Template: ${config.name}]`
-          : message || "";
+    const graphMetaName = metaTemplate?.name?.trim() || "";
+    const previewForSanity = graphMetaName
+      ? normalizeMetaSanityMessagePreview(graphMetaName, previewText)
+      : previewText;
+
+    const paramVals = metaTemplate?.bodyParameterValues ?? [];
+    let outgoingBody: string;
+    if (graphMetaName && paramVals.length > 0) {
+      const structured = formatMetaTemplateSanityBody(graphMetaName, paramVals);
+      outgoingBody = isMetaTemplateStubSanityPreview(graphMetaName, previewForSanity)
+        ? structured
+        : previewForSanity || structured;
+    } else if (graphMetaName) {
+      outgoingBody = previewForSanity || `قالب واتساب: ${graphMetaName}`;
+    } else {
+      outgoingBody = config ? previewText || `[Template: ${config.name}]` : message || "";
+    }
 
     const phoneE164 = `+${num}`;
+
+    const resolvedPatientName =
+      graphMetaName.toLowerCase() === "confirmation" && paramVals[0]?.trim()
+        ? paramVals[0].trim()
+        : (patientName || "").trim() || "عميل غير معروف (V3.1)";
 
     await sanity.create({
       _type: "whatsappConversation",
       phoneNumber: phoneE164,
-      patientName: patientName || "عميل غير معروف (V3.1)",
+      patientName: resolvedPatientName,
       messageBody: outgoingBody,
       status: graphOk ? "sent" : "failed",
       templateUsed: metaTemplate?.name?.trim()
