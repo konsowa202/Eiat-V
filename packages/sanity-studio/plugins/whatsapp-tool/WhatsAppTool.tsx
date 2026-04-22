@@ -73,6 +73,14 @@ function metaTemplateRowKey(t: Pick<MetaWaTemplateRow, 'name' | 'language'>): st
   return `${t.name}::${t.language}`
 }
 
+/** Row preview from `POST /api/whatsapp/batch-xls` (dryRun). */
+type XlsBatchPreviewRow = {
+  rowIndex: number
+  phone: string
+  bodyParameterValues: string[]
+  parseWarnings: string[]
+}
+
 /** Replace {{1}}, {{2}}, … like Meta body components (best-effort chat preview). */
 function fillMetaBodyPlaceholders(bodyText: string, values: string[]): string {
   let out = bodyText || ''
@@ -557,6 +565,9 @@ export function WhatsAppTool() {
   const [readEpoch, setReadEpoch] = useState(0)
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [xlsPreviewRows, setXlsPreviewRows] = useState<XlsBatchPreviewRow[] | null>(null)
+  const [xlsBusy, setXlsBusy] = useState(false)
+  const xlsFileRef = useRef<File | null>(null)
   const [longPressMenu, setLongPressMenu] = useState<{
     msgId: string
     body: string
@@ -863,6 +874,75 @@ export function WhatsAppTool() {
       showAlert('err', `❌ خطأ: ${msg}`)
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleXlsPreview = async () => {
+    const f = xlsFileRef.current
+    if (!f) return showAlert('err', '⚠️ اختر ملف .xls أو .xlsx أولاً')
+    setXlsBusy(true)
+    setAlert(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      fd.append('dryRun', '1')
+      fd.append('templateName', 'confirmation')
+      fd.append('languageCode', 'ar')
+      const res = await fetch(waApiAbs('/api/whatsapp/batch-xls'), {method: 'POST', body: fd})
+      const data = await parseApiResponse(res)
+      const rows = data.rows as XlsBatchPreviewRow[] | undefined
+      if (!data.success || !Array.isArray(rows)) {
+        return showAlert('err', `❌ معاينة: ${String(data.error || 'فشل قراءة الملف')}`)
+      }
+      setXlsPreviewRows(rows)
+      showAlert('ok', `✅ تمت قراءة ${rows.length} صف — راجع الجدول ثم «إرسال القالب للجميع»`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setXlsBusy(false)
+    }
+  }
+
+  const handleXlsSendBatch = async () => {
+    const f = xlsFileRef.current
+    if (!f) return showAlert('err', '⚠️ اختر ملف Excel أولاً')
+    const n = xlsPreviewRows?.length
+    const confirmMsg =
+      n != null
+        ? `إرسال قالب Meta «confirmation» (عربي) إلى ${n} رقم؟`
+        : `إرسال قالب Meta «confirmation» من الملف الحالي؟`
+    if (!window.confirm(confirmMsg)) return
+    setXlsBusy(true)
+    setAlert(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      fd.append('templateName', 'confirmation')
+      fd.append('languageCode', 'ar')
+      const res = await fetch(waApiAbs('/api/whatsapp/batch-xls'), {method: 'POST', body: fd})
+      const data = await parseApiResponse(res)
+      const sent = Number(data.sent) || 0
+      const failed = Number(data.failed) || 0
+      if (!data.success && sent === 0 && failed === 0) {
+        return showAlert('err', `❌ ${String(data.error || 'فشل الإرسال')}`)
+      }
+      if (failed > 0) {
+        showAlert(
+          'err',
+          `⚠️ اكتمل جزئياً: نجح ${sent} — فشل ${failed}. راجع تبويب المحادثات / السجل للتفاصيل.`,
+        )
+      } else {
+        showAlert('ok', `✅ تم إرسال قالب التأكيد: ${sent} رسالة`)
+      }
+      setXlsPreviewRows(null)
+      xlsFileRef.current = null
+      setTimeout(fetchConversations, 1000)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setXlsBusy(false)
     }
   }
 
@@ -1609,6 +1689,7 @@ export function WhatsAppTool() {
 
       {/* ═══ SEND TAB ═══ */}
       {tab === 'send' && (
+        <>
         <div style={S.grid}>
           {/* Templates Panel */}
           <div style={{...S.card}}>
@@ -1905,6 +1986,142 @@ export function WhatsAppTool() {
             </button>
           </div>
         </div>
+
+        <div style={{...S.card, marginTop: '18px'}}>
+          <h2 style={S.secTitle}>📊 تأكيد مواعيد من Excel (تصدير نظام الحجوزات المحلي)</h2>
+          <p style={{fontSize: '12px', color: 'var(--wa-muted)', lineHeight: 1.5, marginTop: 0}}>
+            ارفع ملف <strong dir="ltr">.xls / .xlsx</strong> بنفس أعمدة التصدير: اسم المرسل، نص الرسالة، رقم
+            المستقبل. يتم استخراج الاسم والموعد والخدمة من نص الرسالة تلقائياً، وإرسال قالب Meta المعتمد{' '}
+            <strong dir="ltr">confirmation</strong> (أربعة متغيرات) لكل رقم في العمود الأخير.
+          </p>
+          <div style={{display: 'flex', flexWrap: 'wrap' as const, gap: '10px', alignItems: 'center'}}>
+            <label
+              style={{
+                display: 'inline-block',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(56,189,248,0.35)',
+                color: '#38bdf8',
+                cursor: xlsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                opacity: xlsBusy ? 0.6 : 1,
+              }}
+            >
+              📂 اختيار ملف الحجوزات
+              <input
+                type="file"
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                style={{display: 'none'}}
+                disabled={xlsBusy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null
+                  xlsFileRef.current = file
+                  setXlsPreviewRows(null)
+                  e.target.value = ''
+                  if (file) {
+                    showAlert('ok', `تم اختيار: ${file.name}`)
+                  }
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={xlsBusy}
+              onClick={() => void handleXlsPreview()}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid var(--wa-border)',
+                background: 'var(--wa-surface-2)',
+                color: 'var(--wa-text)',
+                cursor: xlsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              {xlsBusy ? '⏳ …' : '👁 معاينة الصفوف'}
+            </button>
+            <button
+              type="button"
+              disabled={xlsBusy}
+              onClick={() => void handleXlsSendBatch()}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(37,211,102,0.35)',
+                background: 'rgba(37,211,102,0.12)',
+                color: '#16a34a',
+                cursor: xlsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              📤 إرسال قالب التأكيد للجميع
+            </button>
+          </div>
+          {xlsPreviewRows && xlsPreviewRows.length > 0 ? (
+            <div style={{marginTop: '14px', overflowX: 'auto' as const}}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '56px 1fr 1.2fr 1.2fr 1fr 1fr',
+                  gap: '6px',
+                  padding: '8px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--wa-muted)',
+                  borderBottom: '1px solid var(--wa-border)',
+                  minWidth: '720px',
+                }}
+              >
+                <div>#</div>
+                <div dir="ltr">الرقم</div>
+                <div>اسم العميل (1)</div>
+                <div>الموعد (2)</div>
+                <div>الخدمة (3)</div>
+                <div>تأكيد/مرجع (4)</div>
+              </div>
+              {xlsPreviewRows.map((r) => (
+                <div
+                  key={r.rowIndex}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '56px 1fr 1.2fr 1.2fr 1fr 1fr',
+                    gap: '6px',
+                    padding: '10px',
+                    fontSize: '12px',
+                    borderBottom: '1px solid var(--wa-border)',
+                    alignItems: 'start',
+                    minWidth: '720px',
+                  }}
+                >
+                  <div style={{color: 'var(--wa-muted)'}}>{r.rowIndex}</div>
+                  <div dir="ltr" style={{wordBreak: 'break-all' as const}}>
+                    {r.phone}
+                  </div>
+                  {r.bodyParameterValues.slice(0, 4).map((v, i) => (
+                    <div key={i} style={{wordBreak: 'break-word' as const}}>
+                      {v}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {xlsPreviewRows.some((r) => (r.parseWarnings?.length ?? 0) > 0) ? (
+                <div
+                  style={{
+                    marginTop: '10px',
+                    fontSize: '11px',
+                    color: '#fbbf24',
+                  }}
+                >
+                  ⚠️ بعض الصفوف فيها تحذيرات استخراج — راجع النص في Excel إذا كان الشكل مختلفاً.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        </>
       )}
 
       {/* ═══ CHATS TAB (واجهة شات) ═══ */}
