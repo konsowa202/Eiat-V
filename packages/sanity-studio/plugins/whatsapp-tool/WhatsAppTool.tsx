@@ -57,16 +57,18 @@ interface MetaWaTemplateRow {
   bodyText: string
   bodyVariableCount: number
   headerFormat: 'NONE' | 'IMAGE' | 'TEXT' | 'VIDEO' | 'DOCUMENT'
+  /** From Meta HEADER TEXT {{1}}… count; must be sent or Graph returns (#100). */
+  headerVariableCount?: number
 }
 
 /** When `/api/whatsapp/meta-templates` is 404 (Vercel mis-root) or non-JSON — same names as server fallback. */
 const META_CLIENT_FALLBACK: MetaWaTemplateRow[] = [
-  {name: 'opening', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
-  {name: 'open', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
-  {name: 'confirmation', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 4, headerFormat: 'NONE'},
-  {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: 'مرحباً بك من عيادات إيات لطب الأسنان! 🦷✨ سعداء بتواصلك معنا، وسنقوم بالرد عليك في أقرب وقت ممكن.', bodyVariableCount: 0, headerFormat: 'IMAGE'},
-  {name: 'eiat1', language: 'ar', category: 'Utility', bodyText: 'أهلاً بك عميلنا العزيز بكلمة تأكيد! تم استلام رسالتك وسيتم التعامل معها فوراً.', bodyVariableCount: 0, headerFormat: 'IMAGE'},
-  {name: 'hello_world', language: 'en_US', category: 'Utility', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE'},
+  {name: 'opening', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE', headerVariableCount: 0},
+  {name: 'open', language: 'ar', category: 'Marketing', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE', headerVariableCount: 0},
+  {name: 'confirmation', language: 'ar', category: 'Utility', bodyText: '', bodyVariableCount: 4, headerFormat: 'NONE', headerVariableCount: 0},
+  {name: 'eiat', language: 'ar', category: 'Marketing', bodyText: 'مرحباً بك من عيادات إيات لطب الأسنان! 🦷✨ سعداء بتواصلك معنا، وسنقوم بالرد عليك في أقرب وقت ممكن.', bodyVariableCount: 0, headerFormat: 'IMAGE', headerVariableCount: 0},
+  {name: 'eiat1', language: 'ar', category: 'Utility', bodyText: 'أهلاً بك عميلنا العزيز بكلمة تأكيد! تم استلام رسالتك وسيتم التعامل معها فوراً.', bodyVariableCount: 0, headerFormat: 'IMAGE', headerVariableCount: 0},
+  {name: 'hello_world', language: 'en_US', category: 'Utility', bodyText: '', bodyVariableCount: 0, headerFormat: 'NONE', headerVariableCount: 0},
 ]
 
 function metaTemplateRowKey(t: Pick<MetaWaTemplateRow, 'name' | 'language'>): string {
@@ -587,6 +589,8 @@ export function WhatsAppTool() {
   const [metaUsedFallback, setMetaUsedFallback] = useState(false)
   const [selectedMetaKey, setSelectedMetaKey] = useState('')
   const [metaParamValues, setMetaParamValues] = useState<string[]>([])
+  /** TEXT header {{1}}… from Meta (not the image URL field). */
+  const [metaHeaderTextValues, setMetaHeaderTextValues] = useState<string[]>([])
   /** HTTPS CDN URL or Sanity image `_ref` (image-…) for Meta template IMAGE header */
   const [metaHeaderImageInput, setMetaHeaderImageInput] = useState('')
   const [filterCat, setFilterCat] = useState('all')
@@ -725,11 +729,14 @@ export function WhatsAppTool() {
     const t = metaWaTemplates.find((x) => metaTemplateRowKey(x) === selectedMetaKey)
     if (!t) {
       setMetaParamValues([])
+      setMetaHeaderTextValues([])
       setMetaHeaderImageInput('')
       return
     }
 
     const defaultParams = Array.from({length: Math.max(0, t.bodyVariableCount)}, () => '')
+    const hVar = Math.max(0, t.headerVariableCount ?? 0)
+    setMetaHeaderTextValues(Array.from({length: hVar}, () => ''))
     let defaultHeader = ''
 
     // Global Defaults for specific templates
@@ -1078,6 +1085,15 @@ export function WhatsAppTool() {
     const t = selectedMetaTpl
     if (!t) return showAlert('err', '⚠️ اختر قالب فيسبوك من القائمة')
 
+    const hVarCount = t.headerVariableCount ?? 0
+    if (t.headerFormat === 'TEXT' && hVarCount > 0) {
+      for (let i = 0; i < hVarCount; i++) {
+        if (!String(metaHeaderTextValues[i] ?? '').trim()) {
+          return showAlert('err', `⚠️ املأ متغير الهيدر ${i + 1} (مطلوب في قالب فيسبوك)`)
+        }
+      }
+    }
+
     for (let i = 0; i < t.bodyVariableCount; i++) {
       if (!String(metaParamValues[i] ?? '').trim()) {
         return showAlert('err', `⚠️ املأ قيمة المتغير ${i + 1} في القالب`)
@@ -1139,6 +1155,9 @@ export function WhatsAppTool() {
             languageCode: t.language,
             bodyParameterValues: metaParamValues.slice(0, t.bodyVariableCount),
             headerFormat: t.headerFormat,
+            ...(hVarCount > 0 && t.headerFormat === 'TEXT'
+              ? {headerParameterValues: metaHeaderTextValues.slice(0, hVarCount)}
+              : {}),
             ...headerImageFields,
           },
         }),
@@ -1150,6 +1169,7 @@ export function WhatsAppTool() {
         showAlert('ok', `✅ تم إرسال قالب فيسبوك: ${t.name}`)
         setSelectedMetaKey('')
         setMetaParamValues([])
+        setMetaHeaderTextValues([])
         setMetaHeaderImageInput('')
         setTimeout(fetchConversations, 800)
       }
@@ -3034,6 +3054,46 @@ export function WhatsAppTool() {
                               </button>
                             </div>
                           ) : null}
+                          {selectedMetaTpl &&
+                          selectedMetaTpl.headerFormat === 'TEXT' &&
+                          (selectedMetaTpl.headerVariableCount ?? 0) > 0 ? (
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column' as const,
+                                gap: '6px',
+                                padding: '8px 0 4px',
+                              }}
+                            >
+                              <span style={{fontSize: '11px', color: 'var(--wa-muted)', fontWeight: 600}}>
+                                عنوان القالب (هيدر نصي) — {selectedMetaTpl.headerVariableCount} متغير
+                                {' '}مطلوب من Meta وإلا يظهر خطأ (#100).
+                              </span>
+                              {Array.from({length: selectedMetaTpl.headerVariableCount ?? 0}, (_, i) => (
+                                <div key={`h-${i}`} style={{marginBottom: '6px'}}>
+                                  <label style={{...S.label, fontSize: '10px', marginBottom: '2px'}}>
+                                    نص الهيدر {'{{'}
+                                    {i + 1}
+                                    {'}}'}
+                                  </label>
+                                  <input
+                                    dir="auto"
+                                    style={{...S.input, marginBottom: 0, fontSize: '13px'}}
+                                    placeholder={`الهيدر ${i + 1}`}
+                                    value={metaHeaderTextValues[i] ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      setMetaHeaderTextValues((prev) => {
+                                        const next = [...prev]
+                                        next[i] = v
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           {selectedMetaTpl && selectedMetaTpl.bodyVariableCount > 0 ? (
                             <div
                               style={{
@@ -3324,6 +3384,9 @@ const WhatsAppComposer = memo(({
     } else if (broadcastMode) {
       await onBroadcastText(text)
       setText('')
+    } else if (selectedMetaTpl && !editingMsgId) {
+      await onSendMeta(text)
+      setText('')
     } else {
       await onSendText(text)
       setText('')
@@ -3445,6 +3508,11 @@ const WhatsAppComposer = memo(({
         </button>
         <button
           type="button"
+          title={
+            selectedMetaTpl && !editingMsgId && !broadcastMode
+              ? 'إرسال قالب فيسبوك المعتمد (نفس زر 📨)'
+              : undefined
+          }
           style={{
             ...S.sendBtn, marginTop: 0, padding: '12px 18px',
             background: editingMsgId ? 'rgba(59,130,246,0.85)' : undefined,
@@ -3454,7 +3522,7 @@ const WhatsAppComposer = memo(({
           disabled={sending || savingEdit}
           onClick={handleCommit}
         >
-          {editingMsgId ? (savingEdit ? '⏳' : '💾') : (sending ? '…' : (broadcastMode ? '📣' : '📤'))}
+          {editingMsgId ? (savingEdit ? '⏳' : '💾') : (sending ? '…' : (broadcastMode ? '📣' : selectedMetaTpl ? '📨' : '📤'))}
         </button>
         <button
           type="button"

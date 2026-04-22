@@ -31,6 +31,8 @@ export type MetaTemplateSendPayload = {
   languageCode: string;
   bodyParameterValues?: string[];
   headerFormat?: MetaHeaderFormat;
+  /** Required when the approved template HEADER is TEXT with {{1}}, {{2}}, … */
+  headerParameterValues?: string[];
   /** Public HTTPS image URL (e.g. cdn.sanity.io) — Meta accepts `image.link`. */
   headerImageLink?: string;
   /** Sanity image asset `_ref` (e.g. image-abc-def-png) — converted server-side to CDN URL. */
@@ -111,6 +113,19 @@ function normalizeWaNumber(raw: string): string {
   return num;
 }
 
+/** Meta rejects newlines / odd whitespace in template variables → (#100) Invalid parameter. */
+function sanitizeWaTemplateParam(raw: string, maxLen = 1024): string {
+  let s = String(raw ?? "")
+    .replace(/\r\n/g, " ")
+    .replace(/\n/g, " ")
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) s = "—";
+  if (s.length > maxLen) s = s.slice(0, maxLen);
+  return s;
+}
+
 function resolveHeaderImageHttps(meta: MetaTemplateSendPayload): string | null {
   const link = (meta.headerImageLink || "").trim();
   if (link && /^https:\/\//i.test(link)) return link;
@@ -136,7 +151,10 @@ function resolveHeaderImageHttps(meta: MetaTemplateSendPayload): string | null {
 function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): { payload: Record<string, unknown>; graphName: string } {
   const graphName = meta.name.trim();
   const languageCode = (meta.languageCode || "ar").trim();
-  const vals = (meta.bodyParameterValues || []).map((v) => String(v ?? ""));
+  const bodyVals = (meta.bodyParameterValues || []).map((v) => sanitizeWaTemplateParam(String(v ?? "")));
+  const headerTextVals = (meta.headerParameterValues || []).map((v) =>
+    sanitizeWaTemplateParam(String(v ?? ""), 512),
+  );
   const headerFormat: MetaHeaderFormat = meta.headerFormat || "NONE";
 
   const payload: Record<string, unknown> = {
@@ -152,7 +170,12 @@ function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): {
 
   const components: Array<Record<string, unknown>> = [];
 
-  if (headerFormat === "IMAGE") {
+  if (headerFormat === "TEXT" && headerTextVals.length > 0) {
+    components.push({
+      type: "header",
+      parameters: headerTextVals.map((text) => ({ type: "text", text })),
+    });
+  } else if (headerFormat === "IMAGE") {
     const httpsUrl = resolveHeaderImageHttps(meta);
     if (httpsUrl) {
       components.push({
@@ -167,10 +190,10 @@ function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): {
     }
   }
 
-  if (vals.length > 0) {
+  if (bodyVals.length > 0) {
     components.push({
       type: "body",
-      parameters: vals.map((text) => ({ type: "text", text })),
+      parameters: bodyVals.map((text) => ({ type: "text", text })),
     });
   }
 
@@ -284,10 +307,12 @@ export async function POST(req: NextRequest) {
         }
 
         if (config.bodyParams > 0) {
-          const pName = templateParams?.patientName || patientName || "عميلنا العزيز";
-          const pDate = templateParams?.appointmentDate || new Date().toLocaleDateString("ar-SA");
-          const pDoc = templateParams?.doctorName || "عيادات إيات";
-          const pLoc = templateParams?.location || "حي الأندلس، جدة";
+          const pName = sanitizeWaTemplateParam(templateParams?.patientName || patientName || "عميلنا العزيز");
+          const pDate = sanitizeWaTemplateParam(
+            templateParams?.appointmentDate || new Date().toLocaleDateString("ar-SA"),
+          );
+          const pDoc = sanitizeWaTemplateParam(templateParams?.doctorName || "عيادات إيات");
+          const pLoc = sanitizeWaTemplateParam(templateParams?.location || "حي الأندلس، جدة");
 
           const pool = [
             { type: "text", text: pName },

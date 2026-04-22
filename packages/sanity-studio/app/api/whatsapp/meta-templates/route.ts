@@ -45,13 +45,19 @@ export async function GET() {
     const templates = rawTemplates.map((t) => {
       const components = (t.components || []) as Array<{ type: string; text?: string; format?: string }>;
       const bodyComponent = components.find((c) => c.type === "BODY");
+      const headerComponent = components.find((c) => c.type === "HEADER");
+      const headerFormat = (headerComponent?.format || "NONE") as string;
+      const headerText = headerComponent?.text || "";
+      const headerVariableCount =
+        headerFormat === "TEXT" ? (headerText.match(/\{\{\d+\}\}/g) || []).length : 0;
       return {
         name: t.name as string,
         language: t.language as string,
         category: t.category as string,
         bodyText: bodyComponent?.text || "",
         bodyVariableCount: (bodyComponent?.text?.match(/\{\{\d+\}\}/g) || []).length,
-        headerFormat: components.find((c) => c.type === "HEADER")?.format || "NONE",
+        headerFormat: headerFormat || "NONE",
+        headerVariableCount,
       };
     });
 
