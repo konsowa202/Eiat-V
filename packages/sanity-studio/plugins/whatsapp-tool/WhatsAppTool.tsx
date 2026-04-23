@@ -2861,12 +2861,116 @@ export function WhatsAppTool() {
                 style={{
                   width: 'min(320px, 38%)',
                   borderLeft: '1px solid var(--wa-border)',
+                  overflowY: 'auto' as const,
                   maxHeight: '72vh',
                   background: 'var(--wa-surface)',
-                  display: 'flex',
-                  flexDirection: 'column' as const,
                 }}
               >
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderBottom: '1px solid var(--wa-border)',
+                    fontSize: '12px',
+                    color: 'var(--wa-muted)',
+                    background: 'var(--wa-surface-2)',
+                    fontWeight: 700,
+                  }}
+                >
+                  💬 آخر المحادثات ({threadRowsForList.length})
+                </div>
+                {threadRowsForList.map(({th, unread}) => (
+                  <button
+                    key={th.key}
+                    type="button"
+                    className="wa-thread-item"
+                    data-active={selectedThreadKey === th.key ? 'true' : 'false'}
+                    onClick={() => {
+                      startTransition(() => {
+                        setSelectedThreadKey(th.key)
+                        setChatQuickPhone('')
+                        setCreatingNewChat(false)
+                        setSelectedChatTpl(null)
+                      })
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'right' as const,
+                      padding: '12px 14px',
+                      border: 'none',
+                      borderBottom: '1px solid var(--wa-border)',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: 'var(--wa-text)',
+                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                      transition: 'background 0.12s ease',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        direction: 'rtl' as const,
+                      }}
+                    >
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <div
+                          style={{
+                            fontWeight: unread ? 800 : 700,
+                            fontSize: '14px',
+                            color: unread ? 'var(--wa-text)' : undefined,
+                          }}
+                        >
+                          {th.displayName}
+                        </div>
+                        <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                          {th.sendPhone}
+                        </div>
+                      </div>
+                      {unread > 0 ? (
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            minWidth: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            background: '#25d366',
+                            color: '#fff',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 6px',
+                            lineHeight: 1,
+                          }}
+                        >
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: unread ? 'var(--wa-text)' : 'var(--wa-muted)',
+                        marginTop: '4px',
+                        fontWeight: unread ? 600 : 400,
+                        opacity: unread ? 1 : 0.92,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap' as const,
+                      }}
+                    >
+                      {(() => {
+                        const last = th.messages[th.messages.length - 1]
+                        return last
+                          ? conversationMessageBodyForDisplay(last)?.substring(0, 42) || '—'
+                          : '—'
+                      })()}
+                    </div>
+                  </button>
+                ))}
                 <div
                   style={{
                     padding: '10px 12px',
@@ -2887,138 +2991,30 @@ export function WhatsAppTool() {
                     onChange={(e) => setContactsSearch(e.target.value)}
                   />
                 </div>
-                <div style={{flex: '0 0 46%', minHeight: '220px', overflowY: 'auto' as const}}>
-                  {savedContacts.map((c) => (
-                    <button
-                      key={c._id}
-                      type="button"
-                      className="wa-thread-item"
-                      onClick={() => openSavedContact(c)}
-                      style={{
-                        width: '100%',
-                        textAlign: 'right' as const,
-                        padding: '10px 14px',
-                        border: 'none',
-                        borderBottom: '1px dashed var(--wa-border)',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        color: 'var(--wa-text)',
-                        fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
-                      }}
-                    >
-                      <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
-                      <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                        {c.phoneE164}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    borderBottom: '1px solid var(--wa-border)',
-                    fontSize: '11px',
-                    color: 'var(--wa-muted)',
-                    background: 'var(--wa-surface-2)',
-                  }}
-                >
-                  💬 آخر المحادثات ({threadRowsForList.length})
-                </div>
-                <div style={{flex: 1, minHeight: 0, overflowY: 'auto' as const}}>
-                  {threadRowsForList.map(({th, unread}) => (
-                    <button
-                      key={th.key}
-                      type="button"
-                      className="wa-thread-item"
-                      data-active={selectedThreadKey === th.key ? 'true' : 'false'}
-                      onClick={() => {
-                        startTransition(() => {
-                          setSelectedThreadKey(th.key)
-                          setChatQuickPhone('')
-                          setCreatingNewChat(false)
-                          setSelectedChatTpl(null)
-                        })
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'right' as const,
-                        padding: '12px 14px',
-                        border: 'none',
-                        borderBottom: '1px solid var(--wa-border)',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        color: 'var(--wa-text)',
-                        fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
-                        transition: 'background 0.12s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          justifyContent: 'space-between',
-                          gap: 10,
-                          direction: 'rtl' as const,
-                        }}
-                      >
-                        <div style={{flex: 1, minWidth: 0}}>
-                          <div
-                            style={{
-                              fontWeight: unread ? 800 : 700,
-                              fontSize: '14px',
-                              color: unread ? 'var(--wa-text)' : undefined,
-                            }}
-                          >
-                            {th.displayName}
-                          </div>
-                          <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                            {th.sendPhone}
-                          </div>
-                        </div>
-                        {unread > 0 ? (
-                          <span
-                            style={{
-                              flexShrink: 0,
-                              minWidth: 22,
-                              height: 22,
-                              borderRadius: 11,
-                              background: '#25d366',
-                              color: '#fff',
-                              fontSize: 11,
-                              fontWeight: 800,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: '0 6px',
-                              lineHeight: 1,
-                            }}
-                          >
-                            {unread > 99 ? '99+' : unread}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: unread ? 'var(--wa-text)' : 'var(--wa-muted)',
-                          marginTop: '4px',
-                          fontWeight: unread ? 600 : 400,
-                          opacity: unread ? 1 : 0.92,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap' as const,
-                        }}
-                      >
-                        {(() => {
-                          const last = th.messages[th.messages.length - 1]
-                          return last
-                            ? conversationMessageBodyForDisplay(last)?.substring(0, 42) || '—'
-                            : '—'
-                        })()}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {savedContacts.map((c) => (
+                  <button
+                    key={c._id}
+                    type="button"
+                    className="wa-thread-item"
+                    onClick={() => openSavedContact(c)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'right' as const,
+                      padding: '10px 14px',
+                      border: 'none',
+                      borderBottom: '1px dashed var(--wa-border)',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: 'var(--wa-text)',
+                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                    }}
+                  >
+                    <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
+                    <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                      {c.phoneE164}
+                    </div>
+                  </button>
+                ))}
               </div>
 
               {/* منطقة الشات */}
