@@ -624,6 +624,7 @@ export function WhatsAppTool() {
   const [sending, setSending] = useState(false)
   const [alert, setAlert] = useState<{type: 'ok' | 'err'; msg: string} | null>(null)
   const [searchLog, setSearchLog] = useState('')
+  const [contactsSearch, setContactsSearch] = useState('')
   const [logFilter, setLogFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
@@ -702,16 +703,16 @@ export function WhatsAppTool() {
 
   useEffect(() => {
     if (tab !== 'chats') return
-    const q = searchLog.trim()
+    const q = contactsSearch.trim()
     let cancelled = false
     setLoadingSavedContacts(true)
     const run = q
       ? client.fetch<SavedContact[]>(
-          `*[_type == "whatsappContact" && status == "active" && (name match $q || phoneE164 match $q || phoneDigits match $digits)] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`,
+          `*[_type == "whatsappContact" && status == "active" && (name match $q || phoneE164 match $q || phoneDigits match $digits)] | order(lastImportedAt desc)[0...400]{_id, name, phoneE164, phoneDigits, status}`,
           {q: `*${q}*`, digits: `*${q.replace(/\D/g, '')}*`},
         )
       : client.fetch<SavedContact[]>(
-          `*[_type == "whatsappContact" && status == "active"] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`,
+          `*[_type == "whatsappContact" && status == "active"] | order(lastImportedAt desc)[0...400]{_id, name, phoneE164, phoneDigits, status}`,
         )
     run
       .then((rows) => {
@@ -728,7 +729,7 @@ export function WhatsAppTool() {
     return () => {
       cancelled = true
     }
-  }, [client, tab, searchLog, contactsImportStats])
+  }, [client, tab, contactsSearch, contactsImportStats])
 
   // Load templates
   useEffect(() => {
@@ -2685,7 +2686,7 @@ export function WhatsAppTool() {
 
           <input
             style={{...S.input, marginBottom: '16px'}}
-            placeholder="🔍 ابحث باسم جهة الاتصال أو الرقم أو نص الرسالة..."
+            placeholder="🔍 ابحث في المحادثات (اسم/رقم/نص)..."
             value={searchLog}
             onChange={(e) => setSearchLog(e.target.value)}
           />
@@ -2860,9 +2861,10 @@ export function WhatsAppTool() {
                 style={{
                   width: 'min(320px, 38%)',
                   borderLeft: '1px solid var(--wa-border)',
-                  overflowY: 'auto' as const,
                   maxHeight: '72vh',
                   background: 'var(--wa-surface)',
+                  display: 'flex',
+                  flexDirection: 'column' as const,
                 }}
               >
                 <div
@@ -2875,32 +2877,42 @@ export function WhatsAppTool() {
                     fontWeight: 700,
                   }}
                 >
-                  👤 جهات الاتصال المحفوظة {loadingSavedContacts ? '…' : `(${savedContacts.length})`}
+                  👤 جهات الاتصال المحفوظة ({activeContactsCount}) {loadingSavedContacts ? '…' : ''}
                 </div>
-                {savedContacts.slice(0, 40).map((c) => (
-                  <button
-                    key={c._id}
-                    type="button"
-                    className="wa-thread-item"
-                    onClick={() => openSavedContact(c)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'right' as const,
-                      padding: '10px 14px',
-                      border: 'none',
-                      borderBottom: '1px dashed var(--wa-border)',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: 'var(--wa-text)',
-                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
-                    }}
-                  >
-                    <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
-                    <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                      {c.phoneE164}
-                    </div>
-                  </button>
-                ))}
+                <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)'}}>
+                  <input
+                    style={{...S.input, marginBottom: 0}}
+                    placeholder="بحث في الجهات بالاسم أو الرقم..."
+                    value={contactsSearch}
+                    onChange={(e) => setContactsSearch(e.target.value)}
+                  />
+                </div>
+                <div style={{flex: '0 0 46%', minHeight: '220px', overflowY: 'auto' as const}}>
+                  {savedContacts.map((c) => (
+                    <button
+                      key={c._id}
+                      type="button"
+                      className="wa-thread-item"
+                      onClick={() => openSavedContact(c)}
+                      style={{
+                        width: '100%',
+                        textAlign: 'right' as const,
+                        padding: '10px 14px',
+                        border: 'none',
+                        borderBottom: '1px dashed var(--wa-border)',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: 'var(--wa-text)',
+                        fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                      }}
+                    >
+                      <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
+                      <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                        {c.phoneE164}
+                      </div>
+                    </button>
+                  ))}
+                </div>
                 <div
                   style={{
                     padding: '8px 12px',
@@ -2912,99 +2924,101 @@ export function WhatsAppTool() {
                 >
                   💬 آخر المحادثات ({threadRowsForList.length})
                 </div>
-                {threadRowsForList.map(({th, unread}) => (
-                  <button
-                    key={th.key}
-                    type="button"
-                    className="wa-thread-item"
-                    data-active={selectedThreadKey === th.key ? 'true' : 'false'}
-                    onClick={() => {
-                      startTransition(() => {
-                        setSelectedThreadKey(th.key)
-                        setChatQuickPhone('')
-                        setCreatingNewChat(false)
-                        setSelectedChatTpl(null)
-                      })
-                    }}
-                    style={{
-                      width: '100%',
-                      textAlign: 'right' as const,
-                      padding: '12px 14px',
-                      border: 'none',
-                      borderBottom: '1px solid var(--wa-border)',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: 'var(--wa-text)',
-                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
-                      transition: 'background 0.12s ease',
-                    }}
-                  >
-                    <div
+                <div style={{flex: 1, minHeight: 0, overflowY: 'auto' as const}}>
+                  {threadRowsForList.map(({th, unread}) => (
+                    <button
+                      key={th.key}
+                      type="button"
+                      className="wa-thread-item"
+                      data-active={selectedThreadKey === th.key ? 'true' : 'false'}
+                      onClick={() => {
+                        startTransition(() => {
+                          setSelectedThreadKey(th.key)
+                          setChatQuickPhone('')
+                          setCreatingNewChat(false)
+                          setSelectedChatTpl(null)
+                        })
+                      }}
                       style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                        direction: 'rtl' as const,
+                        width: '100%',
+                        textAlign: 'right' as const,
+                        padding: '12px 14px',
+                        border: 'none',
+                        borderBottom: '1px solid var(--wa-border)',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: 'var(--wa-text)',
+                        fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                        transition: 'background 0.12s ease',
                       }}
                     >
-                      <div style={{flex: 1, minWidth: 0}}>
-                        <div
-                          style={{
-                            fontWeight: unread ? 800 : 700,
-                            fontSize: '14px',
-                            color: unread ? 'var(--wa-text)' : undefined,
-                          }}
-                        >
-                          {th.displayName}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          direction: 'rtl' as const,
+                        }}
+                      >
+                        <div style={{flex: 1, minWidth: 0}}>
+                          <div
+                            style={{
+                              fontWeight: unread ? 800 : 700,
+                              fontSize: '14px',
+                              color: unread ? 'var(--wa-text)' : undefined,
+                            }}
+                          >
+                            {th.displayName}
+                          </div>
+                          <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                            {th.sendPhone}
+                          </div>
                         </div>
-                        <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                          {th.sendPhone}
-                        </div>
+                        {unread > 0 ? (
+                          <span
+                            style={{
+                              flexShrink: 0,
+                              minWidth: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              background: '#25d366',
+                              color: '#fff',
+                              fontSize: 11,
+                              fontWeight: 800,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '0 6px',
+                              lineHeight: 1,
+                            }}
+                          >
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        ) : null}
                       </div>
-                      {unread > 0 ? (
-                        <span
-                          style={{
-                            flexShrink: 0,
-                            minWidth: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            background: '#25d366',
-                            color: '#fff',
-                            fontSize: 11,
-                            fontWeight: 800,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '0 6px',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {unread > 99 ? '99+' : unread}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: unread ? 'var(--wa-text)' : 'var(--wa-muted)',
-                        marginTop: '4px',
-                        fontWeight: unread ? 600 : 400,
-                        opacity: unread ? 1 : 0.92,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap' as const,
-                      }}
-                    >
-                      {(() => {
-                        const last = th.messages[th.messages.length - 1]
-                        return last
-                          ? conversationMessageBodyForDisplay(last)?.substring(0, 42) || '—'
-                          : '—'
-                      })()}
-                    </div>
-                  </button>
-                ))}
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: unread ? 'var(--wa-text)' : 'var(--wa-muted)',
+                          marginTop: '4px',
+                          fontWeight: unread ? 600 : 400,
+                          opacity: unread ? 1 : 0.92,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap' as const,
+                        }}
+                      >
+                        {(() => {
+                          const last = th.messages[th.messages.length - 1]
+                          return last
+                            ? conversationMessageBodyForDisplay(last)?.substring(0, 42) || '—'
+                            : '—'
+                        })()}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* منطقة الشات */}
