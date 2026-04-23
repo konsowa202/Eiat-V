@@ -128,7 +128,7 @@ export function parseEjatLocalMessageToConfirmationParams(text: string): {
     patientName: patientName || "عميلنا",
     appointmentText: appointmentText || "—",
     service: service || "—",
-    confirmRef: confirmRef || "—",
+    confirmRef: confirmRef || "00",
   };
 
   return {confirmation, warnings};

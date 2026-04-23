@@ -630,7 +630,6 @@ export function WhatsAppTool() {
   const [longPressMenu, setLongPressMenu] = useState<{
     msgId: string
     body: string
-    isOut: boolean
     x: number
     y: number
   } | null>(null)
@@ -639,6 +638,7 @@ export function WhatsAppTool() {
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const isTypingRef = useRef(false)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const suppressNextChatClickRef = useRef(false)
   const newChatPhoneInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -2599,6 +2599,8 @@ export function WhatsAppTool() {
                           minWidth: '130px',
                           direction: 'rtl' as const,
                         }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
@@ -2624,55 +2626,6 @@ export function WhatsAppTool() {
                         >
                           <span>📋</span> نسخ
                         </button>
-                        {longPressMenu.isOut && (
-                          <button
-                            style={{
-                              width: '100%',
-                              padding: '9px 14px',
-                              background: 'transparent',
-                              border: 'none',
-                              borderRadius: '8px',
-                              color: '#60a5fa',
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              textAlign: 'right' as const,
-                              fontFamily: "'Tajawal','Segoe UI',sans-serif",
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59,130,246,0.1)')}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                            onClick={() => { handleStartEdit(longPressMenu.msgId); setLongPressMenu(null) }}
-                          >
-                            <span>✏️</span> تعديل
-                          </button>
-                        )}
-                        <div style={{height: '1px', background: 'var(--wa-border)', margin: '2px 6px'}} />
-                        <button
-                          style={{
-                            width: '100%',
-                            padding: '9px 14px',
-                            background: 'transparent',
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: '#f87171',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            textAlign: 'right' as const,
-                            fontFamily: "'Tajawal','Segoe UI',sans-serif",
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.1)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                          onClick={() => { void handleDeleteMsg(longPressMenu.msgId); setLongPressMenu(null) }}
-                        >
-                          <span>🗑️</span> حذف
-                        </button>
                       </div>
                     )}
                     <div
@@ -2687,7 +2640,13 @@ export function WhatsAppTool() {
                         gap: '6px',
                         maxHeight: '54vh',
                       }}
-                      onClick={() => setLongPressMenu(null)}
+                      onClick={() => {
+                        if (suppressNextChatClickRef.current) {
+                          suppressNextChatClickRef.current = false
+                          return
+                        }
+                        setLongPressMenu(null)
+                      }}
                     >
                       {activeThread.messages.map((c) => {
                         const out = c.direction === 'outgoing'
@@ -2728,7 +2687,8 @@ export function WhatsAppTool() {
                                 longPressTimerRef.current = setTimeout(() => {
                                   const menuX = Math.min(e.clientX, window.innerWidth - 160)
                                   const menuY = Math.min(e.clientY + 8, window.innerHeight - 160)
-                                  setLongPressMenu({msgId: c._id, body, isOut: out, x: menuX, y: menuY})
+                                  suppressNextChatClickRef.current = true
+                                  setLongPressMenu({msgId: c._id, body, x: menuX, y: menuY})
                                 }, 500)
                               }}
                               onMouseUp={() => clearTimeout(longPressTimerRef.current)}
@@ -2739,7 +2699,8 @@ export function WhatsAppTool() {
                                 longPressTimerRef.current = setTimeout(() => {
                                   const menuX = Math.min(touch.clientX, window.innerWidth - 160)
                                   const menuY = Math.min(touch.clientY + 8, window.innerHeight - 160)
-                                  setLongPressMenu({msgId: c._id, body, isOut: out, x: menuX, y: menuY})
+                                  suppressNextChatClickRef.current = true
+                                  setLongPressMenu({msgId: c._id, body, x: menuX, y: menuY})
                                 }, 500)
                               }}
                               onTouchEnd={() => clearTimeout(longPressTimerRef.current)}

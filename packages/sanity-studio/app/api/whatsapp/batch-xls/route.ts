@@ -16,6 +16,23 @@ function normalizeDigits(raw: string): string {
   return num;
 }
 
+function normalizeTemplateValue(raw: string, fallback = "00"): string {
+  const v = String(raw || "").replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+  if (!v || v === "—") return fallback;
+  return v;
+}
+
+function confirmationParams(row: {
+  confirmation: {patientName: string; appointmentText: string; service: string; confirmRef: string}
+}): [string, string, string, string] {
+  return [
+    normalizeTemplateValue(row.confirmation.patientName, "عميلنا"),
+    normalizeTemplateValue(row.confirmation.appointmentText, "الموعد غير محدد"),
+    normalizeTemplateValue(row.confirmation.service, "الخدمة غير محددة"),
+    normalizeTemplateValue(row.confirmation.confirmRef, "00"),
+  ];
+}
+
 export function OPTIONS() {
   return emptyCors();
 }
@@ -51,12 +68,7 @@ export async function POST(req: NextRequest) {
     const preview = rows.map((r) => ({
       rowIndex: r.rowIndex,
       phone: r.phoneRaw,
-      bodyParameterValues: [
-        r.confirmation.patientName,
-        r.confirmation.appointmentText,
-        r.confirmation.service,
-        r.confirmation.confirmRef,
-      ],
+      bodyParameterValues: confirmationParams(r),
       parseWarnings: r.parseWarnings,
     }));
 
@@ -96,21 +108,11 @@ export async function POST(req: NextRequest) {
       const metaTemplate: MetaTemplateSendPayload = {
         name: templateName,
         languageCode,
-        bodyParameterValues: [
-          r.confirmation.patientName,
-          r.confirmation.appointmentText,
-          r.confirmation.service,
-          r.confirmation.confirmRef,
-        ],
+        bodyParameterValues: confirmationParams(r),
         headerFormat: "NONE",
       };
 
-      const filledPreview = [
-        r.confirmation.patientName,
-        r.confirmation.appointmentText,
-        r.confirmation.service,
-        r.confirmation.confirmRef,
-      ].join(" · ");
+      const filledPreview = confirmationParams(r).join(" · ");
 
       const res = await fetch(sendUrl, {
         method: "POST",
