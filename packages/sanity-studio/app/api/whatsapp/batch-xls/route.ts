@@ -2,6 +2,7 @@ import {NextRequest} from "next/server";
 import {jsonCors, emptyCors} from "../studio-cors";
 import {parseEjatBookingXlsBuffer} from "@/lib/ejatBookingXls";
 import type {MetaTemplateSendPayload} from "../send/route";
+import {waAccessToken, waBusinessAccountId} from "../wa-env";
 
 function requestOrigin(req: NextRequest): string {
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
@@ -33,6 +34,50 @@ function confirmationParams(row: {
   ];
 }
 
+type MetaTemplateSpec = {
+  languageCode: string
+  headerFormat: "NONE" | "IMAGE" | "TEXT" | "VIDEO" | "DOCUMENT"
+  bodyVariableCount: number
+  headerVariableCount: number
+}
+
+async function resolveMetaTemplateSpec(
+  templateName: string,
+  preferredLanguageCode: string,
+): Promise<MetaTemplateSpec | null> {
+  const token = waAccessToken();
+  if (!token) return null;
+  const businessId = waBusinessAccountId();
+  const graph = "https://graph.facebook.com/v21.0";
+  const res = await fetch(
+    `${graph}/${businessId}/message_templates?name=${encodeURIComponent(templateName)}&limit=100`,
+    {headers: {Authorization: `Bearer ${token}`}, cache: "no-store"},
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as {data?: Array<Record<string, unknown>>};
+  const rows = Array.isArray(data.data) ? data.data : [];
+  if (!rows.length) return null;
+  const desired = preferredLanguageCode.trim().toLowerCase();
+  const pick =
+    rows.find((r) => String(r.language || "").trim().toLowerCase() === desired) ||
+    rows.find((r) => String(r.language || "").toLowerCase().startsWith("ar")) ||
+    rows[0];
+  const comps = (pick.components || []) as Array<{type?: string; text?: string; format?: string}>;
+  const body = comps.find((c) => String(c.type || "").toUpperCase() === "BODY");
+  const header = comps.find((c) => String(c.type || "").toUpperCase() === "HEADER");
+  const headerFormat = (String(header?.format || "NONE").toUpperCase() ||
+    "NONE") as MetaTemplateSpec["headerFormat"];
+  const bodyVariableCount = (String(body?.text || "").match(/\{\{\d+\}\}/g) || []).length;
+  const headerVariableCount =
+    headerFormat === "TEXT" ? (String(header?.text || "").match(/\{\{\d+\}\}/g) || []).length : 0;
+  return {
+    languageCode: String(pick.language || preferredLanguageCode || "ar").trim() || "ar",
+    headerFormat,
+    bodyVariableCount,
+    headerVariableCount,
+  };
+}
+
 export function OPTIONS() {
   return emptyCors();
 }
@@ -56,7 +101,15 @@ export async function POST(req: NextRequest) {
       req.nextUrl.searchParams.get("dryRun") === "1";
 
     const templateName = String(form.get("templateName") || "confirmation").trim() || "confirmation";
-    const languageCode = String(form.get("languageCode") || "ar").trim() || "ar";
+    const preferredLanguageCode = String(form.get("languageCode") || "ar").trim() || "ar";
+    const templateSpec = await resolveMetaTemplateSpec(templateName, preferredLanguageCode).catch(() => null);
+    const languageCode = templateSpec?.languageCode || preferredLanguageCode;
+    const bodyParamCount = templateSpec ? templateSpec.bodyVariableCount : 4;
+    const headerFormat = templateSpec?.headerFormat || "NONE";
+    const headerParamValues =
+      headerFormat === "TEXT" && (templateSpec?.headerVariableCount || 0) > 0
+        ? Array.from({length: templateSpec?.headerVariableCount || 0}, (_, i) => `Eiat-${i + 1}`)
+        : undefined;
 
     const buf = await file.arrayBuffer();
     const rows = parseEjatBookingXlsBuffer(buf);
@@ -105,14 +158,17 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      const baseParams = confirmationParams(r);
+      const bodyParams = Array.from({length: bodyParamCount}, (_, i) => baseParams[i] || "00");
       const metaTemplate: MetaTemplateSendPayload = {
         name: templateName,
         languageCode,
-        bodyParameterValues: confirmationParams(r),
-        headerFormat: "NONE",
+        bodyParameterValues: bodyParams,
+        headerFormat,
+        ...(headerParamValues ? {headerParameterValues: headerParamValues} : {}),
       };
 
-      const filledPreview = confirmationParams(r).join(" · ");
+      const filledPreview = bodyParams.join(" · ");
 
       const res = await fetch(sendUrl, {
         method: "POST",
