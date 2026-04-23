@@ -83,6 +83,13 @@ type XlsBatchPreviewRow = {
   parseWarnings: string[]
 }
 
+type ContactImportPreviewRow = {
+  rowIndex: number
+  name: string
+  phone: string
+  exists: boolean
+}
+
 /** Replace {{1}}, {{2}}, … like Meta body components (best-effort chat preview). */
 function fillMetaBodyPlaceholders(bodyText: string, values: string[]): string {
   let out = bodyText || ''
@@ -627,6 +634,18 @@ export function WhatsAppTool() {
   const [xlsPreviewRows, setXlsPreviewRows] = useState<XlsBatchPreviewRow[] | null>(null)
   const [xlsBusy, setXlsBusy] = useState(false)
   const xlsFileRef = useRef<File | null>(null)
+  const [contactsBusy, setContactsBusy] = useState(false)
+  const [contactsPreviewRows, setContactsPreviewRows] = useState<ContactImportPreviewRow[] | null>(null)
+  const [contactsImportStats, setContactsImportStats] = useState<{
+    totalRows: number
+    uniqueValid: number
+    invalid: number
+    willCreate?: number
+    willUpdate?: number
+    created?: number
+    updated?: number
+  } | null>(null)
+  const contactsFileRef = useRef<File | null>(null)
   const [longPressMenu, setLongPressMenu] = useState<{
     msgId: string
     body: string
@@ -1005,6 +1024,76 @@ export function WhatsAppTool() {
       showAlert('err', `❌ ${msg}`)
     } finally {
       setXlsBusy(false)
+    }
+  }
+
+  const handleContactsPreview = async () => {
+    const f = contactsFileRef.current
+    if (!f) return showAlert('err', '⚠️ اختر ملف جهات الاتصال أولاً')
+    setContactsBusy(true)
+    setAlert(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      fd.append('dryRun', '1')
+      fd.append('source', 'contacts-bulk-import')
+      fd.append('tag', 'excel')
+      const res = await fetch(waApiAbs('/api/whatsapp/import-contacts'), {method: 'POST', body: fd})
+      const data = await parseApiResponse(res)
+      if (!data.success) return showAlert('err', `❌ ${String(data.error || 'فشل معاينة الاستيراد')}`)
+      setContactsImportStats({
+        totalRows: Number(data.totalRows) || 0,
+        uniqueValid: Number(data.uniqueValid) || 0,
+        invalid: Number(data.invalid) || 0,
+        willCreate: Number(data.willCreate) || 0,
+        willUpdate: Number(data.willUpdate) || 0,
+      })
+      setContactsPreviewRows((data.preview as ContactImportPreviewRow[] | undefined) || [])
+      showAlert('ok', `✅ تمت المعاينة: صالح ${Number(data.uniqueValid) || 0} — غير صالح ${Number(data.invalid) || 0}`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setContactsBusy(false)
+    }
+  }
+
+  const handleContactsImport = async () => {
+    const f = contactsFileRef.current
+    if (!f) return showAlert('err', '⚠️ اختر ملف جهات الاتصال أولاً')
+    const confirmMsg =
+      contactsImportStats != null
+        ? `تأكيد استيراد ${contactsImportStats.uniqueValid} جهة اتصال (إنشاء ${contactsImportStats.willCreate || 0} + تحديث ${contactsImportStats.willUpdate || 0})؟`
+        : 'تأكيد استيراد جهات الاتصال من ملف Excel؟'
+    if (!window.confirm(confirmMsg)) return
+    setContactsBusy(true)
+    setAlert(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      fd.append('source', 'contacts-bulk-import')
+      fd.append('tag', 'excel')
+      const res = await fetch(waApiAbs('/api/whatsapp/import-contacts'), {method: 'POST', body: fd})
+      const data = await parseApiResponse(res)
+      if (!data.success) return showAlert('err', `❌ ${String(data.error || 'فشل الاستيراد')}`)
+      setContactsImportStats({
+        totalRows: Number(data.totalRows) || 0,
+        uniqueValid: Number(data.uniqueValid) || 0,
+        invalid: Number(data.invalid) || 0,
+        created: Number(data.created) || 0,
+        updated: Number(data.updated) || 0,
+      })
+      showAlert(
+        'ok',
+        `✅ تم حفظ جهات الاتصال: جديد ${Number(data.created) || 0} — محدث ${Number(data.updated) || 0} — غير صالح ${Number(data.invalid) || 0}`,
+      )
+      contactsFileRef.current = null
+      setContactsPreviewRows(null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setContactsBusy(false)
     }
   }
 
@@ -2196,6 +2285,152 @@ export function WhatsAppTool() {
                   ⚠️ بعض الصفوف فيها تحذيرات استخراج — راجع النص في Excel إذا كان الشكل مختلفاً.
                 </div>
               ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{...S.card, marginTop: '18px'}}>
+          <h2 style={S.secTitle}>📥 استيراد جهات اتصال من Excel (حفظ دائم)</h2>
+          <p style={{fontSize: '12px', color: 'var(--wa-muted)', lineHeight: 1.5, marginTop: 0}}>
+            ارفع ملف <strong dir="ltr">.xls / .xlsx</strong> يحتوي عمودين على الأقل (رقم واتساب + الاسم). يتم
+            تنظيف الأرقام، حذف التكرار تلقائيًا، ثم حفظها كـ <strong>جهات اتصال</strong> داخل النظام لتستخدمها
+            لاحقًا في الحملات.
+          </p>
+          <div style={{display: 'flex', flexWrap: 'wrap' as const, gap: '10px', alignItems: 'center'}}>
+            <label
+              style={{
+                display: 'inline-block',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(56,189,248,0.35)',
+                color: '#38bdf8',
+                cursor: contactsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                opacity: contactsBusy ? 0.6 : 1,
+              }}
+            >
+              📂 اختيار ملف جهات الاتصال
+              <input
+                type="file"
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                style={{display: 'none'}}
+                disabled={contactsBusy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null
+                  contactsFileRef.current = file
+                  setContactsPreviewRows(null)
+                  setContactsImportStats(null)
+                  e.target.value = ''
+                  if (file) showAlert('ok', `تم اختيار ملف الاستيراد: ${file.name}`)
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={contactsBusy}
+              onClick={() => void handleContactsPreview()}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid var(--wa-border)',
+                background: 'var(--wa-surface-2)',
+                color: 'var(--wa-text)',
+                cursor: contactsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              {contactsBusy ? '⏳ …' : '👁 معاينة الاستيراد'}
+            </button>
+            <button
+              type="button"
+              disabled={contactsBusy}
+              onClick={() => void handleContactsImport()}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(37,211,102,0.35)',
+                background: 'rgba(37,211,102,0.12)',
+                color: '#16a34a',
+                cursor: contactsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              💾 حفظ جهات الاتصال
+            </button>
+          </div>
+          {contactsImportStats ? (
+            <div
+              style={{
+                marginTop: '12px',
+                fontSize: '12px',
+                color: 'var(--wa-text)',
+                display: 'flex',
+                gap: '14px',
+                flexWrap: 'wrap' as const,
+              }}
+            >
+              <span>📄 الصفوف: {contactsImportStats.totalRows}</span>
+              <span>✅ الصالح: {contactsImportStats.uniqueValid}</span>
+              <span>⚠️ غير صالح: {contactsImportStats.invalid}</span>
+              {typeof contactsImportStats.willCreate === 'number' ? (
+                <span>🆕 سيُنشأ: {contactsImportStats.willCreate}</span>
+              ) : null}
+              {typeof contactsImportStats.willUpdate === 'number' ? (
+                <span>♻️ سيُحدّث: {contactsImportStats.willUpdate}</span>
+              ) : null}
+              {typeof contactsImportStats.created === 'number' ? (
+                <span>🆕 أُنشئ: {contactsImportStats.created}</span>
+              ) : null}
+              {typeof contactsImportStats.updated === 'number' ? (
+                <span>♻️ حُدّث: {contactsImportStats.updated}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {contactsPreviewRows && contactsPreviewRows.length > 0 ? (
+            <div style={{marginTop: '14px', overflowX: 'auto' as const}}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '64px 1fr 1fr 120px',
+                  gap: '6px',
+                  padding: '8px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--wa-muted)',
+                  borderBottom: '1px solid var(--wa-border)',
+                  minWidth: '620px',
+                }}
+              >
+                <div>#</div>
+                <div>الاسم</div>
+                <div dir="ltr">الرقم</div>
+                <div>الحالة</div>
+              </div>
+              {contactsPreviewRows.slice(0, 120).map((r) => (
+                <div
+                  key={`${r.rowIndex}-${r.phone}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '64px 1fr 1fr 120px',
+                    gap: '6px',
+                    padding: '10px',
+                    fontSize: '12px',
+                    borderBottom: '1px solid var(--wa-border)',
+                    alignItems: 'start',
+                    minWidth: '620px',
+                  }}
+                >
+                  <div style={{color: 'var(--wa-muted)'}}>{r.rowIndex}</div>
+                  <div>{r.name}</div>
+                  <div dir="ltr" style={{wordBreak: 'break-all' as const}}>
+                    {r.phone}
+                  </div>
+                  <div style={{color: r.exists ? '#93c5fd' : '#86efac'}}>{r.exists ? 'موجود' : 'جديد'}</div>
+                </div>
+              ))}
             </div>
           ) : null}
         </div>
