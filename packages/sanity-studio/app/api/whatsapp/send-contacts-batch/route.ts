@@ -50,14 +50,23 @@ export async function POST(req: NextRequest) {
     const start = cursor;
     const end = cursor + batchSize;
 
-    const filter = tag
-      ? `*[_type == "whatsappContact" && status == "active" && $tag in tags] | order(_id asc)`
-      : `*[_type == "whatsappContact" && status == "active"] | order(_id asc)`;
-    const contacts = await sanity.fetch<ContactRow[]>(
-      `${filter}[$start...$end]{_id, name, phoneE164, status, tags}`,
-      {start, end, tag},
-    );
-    const total = await sanity.fetch<number>(`count(${filter})`, {tag});
+    let contacts: ContactRow[] = [];
+    let total = 0;
+    if (tag) {
+      const filter = `*[_type == "whatsappContact" && status == "active" && $tag in tags] | order(_id asc)`;
+      contacts = await sanity.fetch<ContactRow[]>(
+        `${filter}[$start...$end]{_id, name, phoneE164, status, tags}`,
+        {start, end, tag},
+      );
+      total = await sanity.fetch<number>(`count(${filter})`, {tag});
+    } else {
+      const filter = `*[_type == "whatsappContact" && status == "active"] | order(_id asc)`;
+      contacts = await sanity.fetch<ContactRow[]>(
+        `${filter}[$start...$end]{_id, name, phoneE164, status, tags}`,
+        {start, end},
+      );
+      total = await sanity.fetch<number>(`count(${filter})`);
+    }
 
     if (!contacts.length) {
       return jsonCors({
