@@ -204,6 +204,59 @@ function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): {
   return { payload, graphName };
 }
 
+async function sendGraphPayload(payload: Record<string, unknown>): Promise<{
+  response: Response;
+  waData: Record<string, unknown>;
+}> {
+  const response = await fetch(`${GRAPH}/${WA_PHONE_ID}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${WA_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  let waData: Record<string, unknown> = {};
+  try {
+    const raw = await response.text();
+    waData = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    waData = {error: {message: "Invalid JSON from WhatsApp Graph", code: 0}};
+  }
+  return {response, waData};
+}
+
+function payloadTemplateName(payload: Record<string, unknown>): string {
+  const tpl = payload.template as {name?: unknown} | undefined;
+  return typeof tpl?.name === "string" ? tpl.name : "";
+}
+
+function payloadTemplateLanguage(payload: Record<string, unknown>): string {
+  const tpl = payload.template as {language?: {code?: unknown}} | undefined;
+  const raw = tpl?.language?.code;
+  return typeof raw === "string" ? raw : "";
+}
+
+function withTemplateLanguage(payload: Record<string, unknown>, languageCode: string): Record<string, unknown> {
+  const next = structuredClone(payload);
+  const tpl = (next.template || {}) as {language?: {code?: string}};
+  tpl.language = {code: languageCode};
+  next.template = tpl as unknown as Record<string, unknown>;
+  return next;
+}
+
+function withTemplateComponents(payload: Record<string, unknown>, mode: "keep" | "body-only" | "none"): Record<string, unknown> {
+  const next = structuredClone(payload);
+  const tpl = (next.template || {}) as {components?: Array<Record<string, unknown>>};
+  const comps = Array.isArray(tpl.components) ? tpl.components : [];
+  if (mode === "none") {
+    delete tpl.components;
+  } else if (mode === "body-only") {
+    tpl.components = comps.filter((c) => String(c.type || "").toLowerCase() === "body");
+    if (tpl.components.length === 0) delete tpl.components;
+  }
+  next.template = tpl as unknown as Record<string, unknown>;
+  return next;
+}
+
 export function OPTIONS() {
   return emptyCors();
 }
@@ -333,36 +386,75 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const response = await fetch(`${GRAPH}/${WA_PHONE_ID}/messages`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${WA_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    let waData: Record<string, unknown> = {};
-    try {
-      const raw = await response.text();
-      waData = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    } catch {
-      waData = {error: {message: "Invalid JSON from WhatsApp Graph", code: 0}};
-    }
+    let {response, waData} = await sendGraphPayload(payload);
 
     const graphErr = waData.error as
-      | {code?: number; message?: string; error_user_title?: string; error_user_msg?: string}
+      | {code?: number; message?: string; error_user_title?: string; error_user_msg?: string; error_data?: {details?: string}}
       | undefined;
     const msgArr = waData.messages as {id?: string}[] | undefined;
-    const wamid =
+    let wamid =
       Array.isArray(msgArr) && msgArr[0] && typeof msgArr[0].id === "string" ? msgArr[0].id : "";
 
     /** HTTP 200 alone is not enough — Meta errors often sit in `waData.error`, and webhooks match on `wamid`. */
-    const graphOk = Boolean(response.ok && !graphErr && wamid);
+    let graphOk = Boolean(response.ok && !graphErr && wamid);
+
+    // Meta often throws code 100 for template language/components mismatch. Retry with safe variants.
+    if (!graphOk && graphErr?.code === 100 && payload.type === "template") {
+      const tried = new Set<string>();
+      const langNow = payloadTemplateLanguage(payload) || "ar";
+      const langCandidates = [langNow, "ar", "ar_EG", "en_US"].filter((x, i, a) => !!x && a.indexOf(x) === i);
+      const componentModes: Array<"keep" | "body-only" | "none"> = ["keep", "body-only", "none"];
+      const attempts: Record<string, unknown>[] = [];
+      for (const lang of langCandidates) {
+        for (const mode of componentModes) {
+          const candidate = withTemplateComponents(withTemplateLanguage(payload, lang), mode);
+          const key = JSON.stringify({
+            name: payloadTemplateName(candidate),
+            lang: payloadTemplateLanguage(candidate),
+            comps: ((candidate.template as {components?: unknown[]})?.components || []).length,
+            mode,
+          });
+          if (tried.has(key)) continue;
+          tried.add(key);
+          attempts.push(candidate);
+        }
+      }
+      for (const candidate of attempts) {
+        const retried = await sendGraphPayload(candidate);
+        const err = retried.waData.error as
+          | {code?: number; message?: string; error_user_title?: string; error_user_msg?: string}
+          | undefined;
+        const msgs = retried.waData.messages as {id?: string}[] | undefined;
+        const retryWamid =
+          Array.isArray(msgs) && msgs[0] && typeof msgs[0].id === "string" ? msgs[0].id : "";
+        const retryOk = Boolean(retried.response.ok && !err && retryWamid);
+        if (retryOk) {
+          response = retried.response;
+          waData = retried.waData;
+          payload = candidate;
+          wamid = retryWamid;
+          graphOk = true;
+          break;
+        }
+      }
+    }
 
     if (!graphOk) {
       console.warn("[WA send] Graph rejected or incomplete:", JSON.stringify(waData).slice(0, 2000));
     }
 
-    const graphErrLine = graphErr
-      ? `[${graphErr.code ?? "?"}] ${graphErr.error_user_msg || graphErr.message || graphErr.error_user_title || "Graph error"}`
+    const finalGraphErr = waData.error as
+      | {code?: number; message?: string; error_user_title?: string; error_user_msg?: string; error_data?: {details?: string}}
+      | undefined;
+
+    const graphErrLine = finalGraphErr
+      ? `[${finalGraphErr.code ?? "?"}] ${
+          finalGraphErr.error_user_msg ||
+          finalGraphErr.error_data?.details ||
+          finalGraphErr.message ||
+          finalGraphErr.error_user_title ||
+          "Graph error"
+        }`
       : !response.ok
         ? `HTTP ${response.status}`
         : !wamid
