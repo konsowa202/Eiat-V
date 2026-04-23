@@ -705,12 +705,15 @@ export function WhatsAppTool() {
     const q = searchLog.trim()
     let cancelled = false
     setLoadingSavedContacts(true)
-    const fetchQuery = q
-      ? `*[_type == "whatsappContact" && status == "active" && (name match $q || phoneE164 match $q || phoneDigits match $digits)] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`
-      : `*[_type == "whatsappContact" && status == "active"] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`
-    const params = q ? {q: `*${q}*`, digits: `*${q.replace(/\D/g, '')}*`} : undefined
-    client
-      .fetch<SavedContact[]>(fetchQuery, params)
+    const run = q
+      ? client.fetch<SavedContact[]>(
+          `*[_type == "whatsappContact" && status == "active" && (name match $q || phoneE164 match $q || phoneDigits match $digits)] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`,
+          {q: `*${q}*`, digits: `*${q.replace(/\D/g, '')}*`},
+        )
+      : client.fetch<SavedContact[]>(
+          `*[_type == "whatsappContact" && status == "active"] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`,
+        )
+    run
       .then((rows) => {
         if (cancelled) return
         setSavedContacts(Array.isArray(rows) ? rows : [])
