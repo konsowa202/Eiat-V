@@ -151,7 +151,10 @@ function resolveHeaderImageHttps(meta: MetaTemplateSendPayload): string | null {
 function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): { payload: Record<string, unknown>; graphName: string } {
   const graphName = meta.name.trim();
   const languageCode = (meta.languageCode || "ar").trim();
-  const bodyVals = (meta.bodyParameterValues || []).map((v) => sanitizeWaTemplateParam(String(v ?? "")));
+  const bodyMaxLen = graphName.toLowerCase() === "confirmation" ? 30 : 1024;
+  const bodyVals = (meta.bodyParameterValues || []).map((v) =>
+    sanitizeWaTemplateParam(String(v ?? ""), bodyMaxLen),
+  );
   const headerTextVals = (meta.headerParameterValues || []).map((v) =>
     sanitizeWaTemplateParam(String(v ?? ""), 512),
   );
