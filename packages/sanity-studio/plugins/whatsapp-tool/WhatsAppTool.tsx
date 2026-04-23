@@ -215,6 +215,14 @@ interface ConversationDoc {
   waMediaId?: string
 }
 
+interface SavedContact {
+  _id: string
+  name?: string
+  phoneE164: string
+  phoneDigits?: string
+  status?: string
+}
+
 interface WaThread {
   key: string
   sendPhone: string
@@ -635,6 +643,8 @@ export function WhatsAppTool() {
   } | null>(null)
   const [recording, setRecording] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [savedContacts, setSavedContacts] = useState<SavedContact[]>([])
+  const [loadingSavedContacts, setLoadingSavedContacts] = useState(false)
   const [chatNameDraft, setChatNameDraft] = useState('')
   const [savingChatName, setSavingChatName] = useState(false)
   const [readEpoch, setReadEpoch] = useState(0)
@@ -689,6 +699,33 @@ export function WhatsAppTool() {
       .then((n) => setActiveContactsCount(Number(n) || 0))
       .catch(() => setActiveContactsCount(0))
   }, [client, contactsImportStats])
+
+  useEffect(() => {
+    if (tab !== 'chats') return
+    const q = searchLog.trim()
+    let cancelled = false
+    setLoadingSavedContacts(true)
+    const fetchQuery = q
+      ? `*[_type == "whatsappContact" && status == "active" && (name match $q || phoneE164 match $q || phoneDigits match $digits)] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`
+      : `*[_type == "whatsappContact" && status == "active"] | order(lastImportedAt desc)[0...120]{_id, name, phoneE164, phoneDigits, status}`
+    const params = q ? {q: `*${q}*`, digits: `*${q.replace(/\D/g, '')}*`} : undefined
+    client
+      .fetch<SavedContact[]>(fetchQuery, params)
+      .then((rows) => {
+        if (cancelled) return
+        setSavedContacts(Array.isArray(rows) ? rows : [])
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSavedContacts([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSavedContacts(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [client, tab, searchLog, contactsImportStats])
 
   // Load templates
   useEffect(() => {
@@ -1547,6 +1584,32 @@ export function WhatsAppTool() {
   const activeThread = useMemo(
     () => threads.find((t) => t.key === selectedThreadKey) || null,
     [threads, selectedThreadKey],
+  )
+
+  const openSavedContact = useCallback(
+    (c: SavedContact) => {
+      const normalized = normalizePhone(c.phoneE164 || c.phoneDigits || '')
+      if (!normalized) return
+      const existing = threads.find((t) => t.sendPhone === normalized)
+      if (existing) {
+        startTransition(() => {
+          setSelectedThreadKey(existing.key)
+          setCreatingNewChat(false)
+          setChatQuickPhone('')
+          setSelectedChatTpl(null)
+        })
+      } else {
+        startTransition(() => {
+          setSelectedThreadKey(null)
+          setCreatingNewChat(true)
+          setChatQuickPhone(normalized)
+          setPatientName((c.name || '').trim())
+          setChatNameDraft((c.name || '').trim())
+          setSelectedChatTpl(null)
+        })
+      }
+    },
+    [threads],
   )
 
   const lastReadMsForThread = useCallback(
@@ -2799,6 +2862,53 @@ export function WhatsAppTool() {
                   background: 'var(--wa-surface)',
                 }}
               >
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderBottom: '1px solid var(--wa-border)',
+                    fontSize: '12px',
+                    color: 'var(--wa-muted)',
+                    background: 'var(--wa-surface-2)',
+                    fontWeight: 700,
+                  }}
+                >
+                  👤 جهات الاتصال المحفوظة {loadingSavedContacts ? '…' : `(${savedContacts.length})`}
+                </div>
+                {savedContacts.slice(0, 40).map((c) => (
+                  <button
+                    key={c._id}
+                    type="button"
+                    className="wa-thread-item"
+                    onClick={() => openSavedContact(c)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'right' as const,
+                      padding: '10px 14px',
+                      border: 'none',
+                      borderBottom: '1px dashed var(--wa-border)',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: 'var(--wa-text)',
+                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                    }}
+                  >
+                    <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
+                    <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                      {c.phoneE164}
+                    </div>
+                  </button>
+                ))}
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderBottom: '1px solid var(--wa-border)',
+                    fontSize: '11px',
+                    color: 'var(--wa-muted)',
+                    background: 'var(--wa-surface-2)',
+                  }}
+                >
+                  💬 آخر المحادثات ({threadRowsForList.length})
+                </div>
                 {threadRowsForList.map(({th, unread}) => (
                   <button
                     key={th.key}
