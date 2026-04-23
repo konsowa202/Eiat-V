@@ -377,7 +377,11 @@ export async function POST(req: NextRequest) {
 
     const paramVals = metaTemplate?.bodyParameterValues ?? [];
     let outgoingBody: string;
-    if (graphMetaName && paramVals.length > 0) {
+    if (!graphOk) {
+      const failedTemplateName = graphMetaName || config?.name || (templateUsed || "").trim() || "unknown";
+      const details = graphErrLine ? `\nالسبب: ${graphErrLine}` : "";
+      outgoingBody = `❌ فشل إرسال قالب واتساب: ${failedTemplateName}${details}`;
+    } else if (graphMetaName && paramVals.length > 0) {
       const structured = formatMetaTemplateSanityBody(graphMetaName, paramVals);
       outgoingBody = isMetaTemplateStubSanityPreview(graphMetaName, previewForSanity)
         ? structured
