@@ -53,19 +53,18 @@ export async function POST(req: NextRequest) {
     let contacts: ContactRow[] = [];
     let total = 0;
     if (tag) {
-      const filter = `*[_type == "whatsappContact" && status == "active" && $tag in tags] | order(_id asc)`;
+      const tagLiteral = JSON.stringify(tag);
       contacts = await sanity.fetch<ContactRow[]>(
-        `${filter}[$start...$end]{_id, name, phoneE164, status, tags}`,
-        {start, end, tag},
+        `*[_type == "whatsappContact" && status == "active" && ${tagLiteral} in tags] | order(_id asc)[${start}...${end}]{_id, name, phoneE164, status, tags}`,
       );
-      total = await sanity.fetch<number>(`count(${filter})`, {tag});
+      total = await sanity.fetch<number>(
+        `count(*[_type == "whatsappContact" && status == "active" && ${tagLiteral} in tags])`,
+      );
     } else {
-      const filter = `*[_type == "whatsappContact" && status == "active"] | order(_id asc)`;
       contacts = await sanity.fetch<ContactRow[]>(
-        `${filter}[$start...$end]{_id, name, phoneE164, status, tags}`,
-        {start, end},
+        `*[_type == "whatsappContact" && status == "active"] | order(_id asc)[${start}...${end}]{_id, name, phoneE164, status, tags}`,
       );
-      total = await sanity.fetch<number>(`count(${filter})`);
+      total = await sanity.fetch<number>(`count(*[_type == "whatsappContact" && status == "active"])`);
     }
 
     if (!contacts.length) {
