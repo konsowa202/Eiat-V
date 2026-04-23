@@ -624,6 +624,15 @@ export function WhatsAppTool() {
   const [broadcastMode, setBroadcastMode] = useState(false)
   const [sendBroadcastMode, setSendBroadcastMode] = useState(false)
   const [sendBroadcastNumbersRaw, setSendBroadcastNumbersRaw] = useState('')
+  const [sendFromSavedContacts, setSendFromSavedContacts] = useState(false)
+  const [contactsBatchSize, setContactsBatchSize] = useState(300)
+  const [activeContactsCount, setActiveContactsCount] = useState(0)
+  const [campaignProgress, setCampaignProgress] = useState<{
+    total: number
+    processed: number
+    sent: number
+    failed: number
+  } | null>(null)
   const [recording, setRecording] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [chatNameDraft, setChatNameDraft] = useState('')
@@ -673,6 +682,13 @@ export function WhatsAppTool() {
   }, [])
 
   const isLight = theme === 'light'
+
+  useEffect(() => {
+    client
+      .fetch<number>(`count(*[_type == "whatsappContact" && status == "active"])`)
+      .then((n) => setActiveContactsCount(Number(n) || 0))
+      .catch(() => setActiveContactsCount(0))
+  }, [client, contactsImportStats])
 
   // Load templates
   useEffect(() => {
@@ -874,6 +890,64 @@ export function WhatsAppTool() {
   const handleSend = async () => {
     const text = selectedTpl ? preview() : customMsg
     if (!text.trim()) return showAlert('err', '⚠️ اختر قالب أو اكتب رسالة')
+
+    if (sendBroadcastMode && sendFromSavedContacts) {
+      setSending(true)
+      setAlert(null)
+      setCampaignProgress({total: 0, processed: 0, sent: 0, failed: 0})
+      let cursor = 0
+      let total = 0
+      let sent = 0
+      let failed = 0
+      let processed = 0
+      try {
+        const maxLoops = 1200
+        for (let loop = 0; loop < maxLoops; loop++) {
+          const res = await fetch(waApiAbs('/api/whatsapp/send-contacts-batch'), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              message: text,
+              templateUsed: selectedTpl?.name || 'Broadcast',
+              templateParams: {
+                patientName: patientName || 'عميلنا العزيز',
+                appointmentDate: appointmentDate || new Date().toLocaleDateString('ar-SA'),
+                doctorName: doctorName || 'عيادات إيات',
+                location: 'حي الأندلس، جدة',
+              },
+              cursor,
+              batchSize: Math.min(1000, Math.max(50, contactsBatchSize || 300)),
+            }),
+          })
+          const data = await parseApiResponse(res)
+          if (!data.success) {
+            showAlert('err', `❌ فشل حملة الجهات المحفوظة: ${String(data.error || 'خطأ غير معروف')}`)
+            break
+          }
+          total = Number(data.total) || total
+          sent += Number(data.sent) || 0
+          failed += Number(data.failed) || 0
+          processed += Number(data.processed) || 0
+          cursor = Number(data.nextCursor) || cursor
+          setCampaignProgress({total, processed, sent, failed})
+          setAlert({
+            type: 'ok',
+            msg: `📣 جاري الإرسال من جهات الاتصال: ${processed}/${total || '?'} — ✅ ${sent} / ❌ ${failed}`,
+          })
+          if (Boolean(data.done) || Number(data.processed) === 0) {
+            showAlert('ok', `✅ اكتملت حملة جهات الاتصال: ${processed}/${total} — ✅ ${sent} / ❌ ${failed}`)
+            break
+          }
+        }
+        setTimeout(fetchConversations, 1200)
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
+        showAlert('err', `❌ ${msg}`)
+      } finally {
+        setSending(false)
+      }
+      return
+    }
 
     const manualTargets = extractBroadcastTargets(sendBroadcastNumbersRaw)
     const historyTargets: BroadcastTarget[] = threads.map((t) => ({
@@ -1967,7 +2041,14 @@ export function WhatsAppTool() {
               <input
                 type="checkbox"
                 checked={sendBroadcastMode}
-                onChange={(e) => setSendBroadcastMode(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setSendBroadcastMode(checked)
+                  if (!checked) {
+                    setSendFromSavedContacts(false)
+                    setCampaignProgress(null)
+                  }
+                }}
               />
               <span style={{fontSize: '12px', color: 'var(--wa-muted)'}}>
                 إرسال جماعي من تبويب الإرسال (broadcast)
@@ -1984,7 +2065,50 @@ export function WhatsAppTool() {
                   background: 'rgba(15,23,42,0.45)',
                 }}
               >
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
+                  <input
+                    type="checkbox"
+                    checked={sendFromSavedContacts}
+                    onChange={(e) => setSendFromSavedContacts(e.target.checked)}
+                  />
+                  <span style={{fontSize: '12px', color: 'var(--wa-muted)'}}>
+                    إرسال من جهات الاتصال المحفوظة ({activeContactsCount} جهة نشطة)
+                  </span>
+                </label>
+                {sendFromSavedContacts ? (
+                  <div
+                    style={{
+                      marginBottom: '10px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(56,189,248,0.25)',
+                      background: 'rgba(8,47,73,0.28)',
+                    }}
+                  >
+                    <label style={{...S.label, marginBottom: '4px'}}>حجم الدفعة لكل طلب</label>
+                    <input
+                      style={{...S.input, marginBottom: '6px'}}
+                      type="number"
+                      min={50}
+                      max={1000}
+                      value={contactsBatchSize}
+                      onChange={(e) => setContactsBatchSize(Math.max(50, Math.min(1000, Number(e.target.value) || 300)))}
+                    />
+                    <div style={{fontSize: '11px', color: 'var(--wa-muted)'}}>
+                      كل دفعة تُرسل تدريجيًا من الخادم مع حفظ السجل. مناسب لأحجام كبيرة مثل 15000 جهة.
+                    </div>
+                    {campaignProgress ? (
+                      <div style={{marginTop: '8px', fontSize: '12px', color: '#86efac'}}>
+                        التقدم: {campaignProgress.processed}/{campaignProgress.total || '?'} — ✅ {campaignProgress.sent} / ❌{' '}
+                        {campaignProgress.failed}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {!sendFromSavedContacts ? (
                 <label style={S.label}>أرقام إضافية (سطر/فاصلة)</label>
+                ) : null}
+                {!sendFromSavedContacts ? (
                 <textarea
                   style={{...S.textarea, minHeight: '92px'}}
                   value={sendBroadcastNumbersRaw}
@@ -1993,6 +2117,8 @@ export function WhatsAppTool() {
                   }
                   onChange={(e) => setSendBroadcastNumbersRaw(e.target.value)}
                 />
+                ) : null}
+                {!sendFromSavedContacts ? (
                 <label
                   style={{
                     display: 'inline-block',
@@ -2020,9 +2146,13 @@ export function WhatsAppTool() {
                     }}
                   />
                 </label>
+                ) : null}
+                {!sendFromSavedContacts ? (
                 <div style={{marginTop: '10px', fontSize: '12px', color: 'var(--wa-muted)'}}>
                   هيستوري الأرقام:
                 </div>
+                ) : null}
+                {!sendFromSavedContacts ? (
                 <div style={{display: 'flex', flexWrap: 'wrap' as const, gap: '6px', marginTop: '6px'}}>
                   {historyNumbers.slice(0, 60).map((n) => (
                     <button
@@ -2046,10 +2176,13 @@ export function WhatsAppTool() {
                     </button>
                   ))}
                 </div>
+                ) : null}
+                {!sendFromSavedContacts ? (
                 <div style={{marginTop: '8px', fontSize: '11px', color: 'var(--wa-muted)'}}>
                   المستهدفون = أرقام الهيستوري + الأرقام المضافة/المرفوعة (بدون تكرار)،
                   ويمكن إدخال الاسم مع الرقم بصيغة name|phone.
                 </div>
+                ) : null}
               </div>
             )}
 
