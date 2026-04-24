@@ -19,6 +19,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkgRoot = path.resolve(__dirname, '..')
 
+/** If parent shell set this, never let .env files override it (one-off CLI runs). */
+const injectedWriteToken = (process.env.SANITY_API_WRITE_TOKEN || '').trim()
+
 /** @param {{ override?: boolean }} opts - if override, keys in this file replace existing process.env */
 function mergeEnvFromFile(absPath, opts = {}) {
   const override = opts.override === true
@@ -44,6 +47,10 @@ function mergeEnvFromFile(absPath, opts = {}) {
 
 mergeEnvFromFile(path.join(pkgRoot, '../eiat-site/.env.local'), {override: false})
 mergeEnvFromFile(path.join(pkgRoot, '.env.local'), {override: true})
+
+if (injectedWriteToken) {
+  process.env.SANITY_API_WRITE_TOKEN = injectedWriteToken
+}
 
 const tokenFrom = process.env.SANITY_API_WRITE_TOKEN?.trim()
   ? 'SANITY_API_WRITE_TOKEN'
