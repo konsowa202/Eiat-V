@@ -4,11 +4,19 @@ import { createClient } from "@sanity/client";
 import createImageUrlBuilder from "@sanity/image-url";
 import { waAccessToken, waPhoneNumberId } from "../wa-env";
 
+function sanityWriteToken(): string {
+  return (process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN || "").trim();
+}
+
+function sanityWriteConfigured(): boolean {
+  return Boolean(sanityWriteToken());
+}
+
 const sanity = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "f46widyg",
   dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
   apiVersion: "2024-01-01",
-  token: process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN,
+  token: sanityWriteToken() || undefined,
   useCdn: false,
 });
 
@@ -148,10 +156,17 @@ function resolveHeaderImageHttps(meta: MetaTemplateSendPayload): string | null {
   return null;
 }
 
+/** Meta often caps each BODY text variable at 30 chars (marketing/utility); longer values cause (#100) Invalid parameter. */
+function metaBodyVariableMaxLen(graphName: string): number {
+  const g = graphName.toLowerCase();
+  if (g === "confirmation" || g === "eiat1") return 30;
+  return 1024;
+}
+
 function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): { payload: Record<string, unknown>; graphName: string } {
   const graphName = meta.name.trim();
   const languageCode = (meta.languageCode || "ar").trim();
-  const bodyMaxLen = graphName.toLowerCase() === "confirmation" ? 30 : 1024;
+  const bodyMaxLen = metaBodyVariableMaxLen(graphName);
   const bodyVals = (meta.bodyParameterValues || []).map((v) =>
     sanitizeWaTemplateParam(String(v ?? ""), bodyMaxLen),
   );
@@ -363,12 +378,14 @@ export async function POST(req: NextRequest) {
         }
 
         if (config.bodyParams > 0) {
-          const pName = sanitizeWaTemplateParam(templateParams?.patientName || patientName || "عميلنا العزيز");
+          const paramMax = metaBodyVariableMaxLen(config.name);
+          const pName = sanitizeWaTemplateParam(templateParams?.patientName || patientName || "عميلنا العزيز", paramMax);
           const pDate = sanitizeWaTemplateParam(
             templateParams?.appointmentDate || new Date().toLocaleDateString("ar-SA"),
+            paramMax,
           );
-          const pDoc = sanitizeWaTemplateParam(templateParams?.doctorName || "عيادات إيات");
-          const pLoc = sanitizeWaTemplateParam(templateParams?.location || "حي الأندلس، جدة");
+          const pDoc = sanitizeWaTemplateParam(templateParams?.doctorName || "عيادات إيات", paramMax);
+          const pLoc = sanitizeWaTemplateParam(templateParams?.location || "حي الأندلس، جدة", paramMax);
 
           const pool = [
             { type: "text", text: pName },
@@ -494,23 +511,37 @@ export async function POST(req: NextRequest) {
         ? paramVals[0].trim()
         : (patientName || "").trim() || "عميل غير معروف (V3.1)";
 
-    await sanity.create({
-      _type: "whatsappConversation",
-      phoneNumber: phoneE164,
-      patientName: resolvedPatientName,
-      messageBody: outgoingBody,
-      status: graphOk ? "sent" : "failed",
-      templateUsed: metaTemplate?.name?.trim()
-        ? graphTemplateName
-        : config
-          ? config.name
-          : templateUsed || "رسالة مخصصة",
-      direction: "outgoing",
-      sentAt: new Date().toISOString(),
-      ...(graphOk && wamid ? {wamid} : {}),
-      ...(!graphOk && graphErrLine ? {errorMessage: graphErrLine} : {}),
-      notes: JSON.stringify({ version: "3.3", payload, waData, graphOk, graphErrLine }, null, 2),
-    });
+    let logPersistError = "";
+    if (!sanityWriteConfigured()) {
+      logPersistError =
+        "لم يُحفظ السجل في Sanity: SANITY_API_WRITE_TOKEN غير مضبوط على الخادم (مثلاً Vercel). أضف توكن كتابة (Editor) حتى تظهر الرسائل في الشات.";
+    } else {
+      try {
+        await sanity.create({
+          _type: "whatsappConversation",
+          phoneNumber: phoneE164,
+          patientName: resolvedPatientName,
+          messageBody: outgoingBody,
+          status: graphOk ? "sent" : "failed",
+          templateUsed: metaTemplate?.name?.trim()
+            ? graphTemplateName
+            : config
+              ? config.name
+              : templateUsed || "رسالة مخصصة",
+          direction: "outgoing",
+          sentAt: new Date().toISOString(),
+          ...(graphOk && wamid ? {wamid} : {}),
+          ...(!graphOk && graphErrLine ? {errorMessage: graphErrLine} : {}),
+          notes: JSON.stringify({ version: "3.3", payload, waData, graphOk, graphErrLine }, null, 2),
+        });
+      } catch (persistErr: unknown) {
+        const raw = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        logPersistError = raw.includes("403") || raw.toLowerCase().includes("forbidden")
+          ? "لم يُحفظ السجل: Sanity رفض الكتابة (403). تحقق من SANITY_API_WRITE_TOKEN (صلاحيات Editor) ونفس الـ dataset."
+          : `لم يُحفظ السجل في Sanity: ${raw}`;
+        console.error("[WA send] Sanity log persist failed:", raw);
+      }
+    }
 
     return jsonCors({
       success: graphOk,
@@ -518,6 +549,7 @@ export async function POST(req: NextRequest) {
       waData,
       ...(graphOk && wamid ? {wamid} : {}),
       ...(!graphOk && graphErrLine ? {error: graphErrLine} : {}),
+      ...(logPersistError ? {warning: logPersistError} : {}),
     });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);

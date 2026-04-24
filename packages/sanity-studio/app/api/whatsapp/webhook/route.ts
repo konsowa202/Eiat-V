@@ -13,6 +13,11 @@ function sanityReady(): boolean {
   return Boolean((process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN)?.trim());
 }
 
+function safeConversationIdFromWamid(wamid: string): string {
+  const safe = (wamid || "").replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `wa_conv_${safe || Date.now()}`;
+}
+
 /**
  * GET — Meta webhook verification handshake.
  * Meta sends hub.mode, hub.verify_token, hub.challenge as query params.
@@ -108,7 +113,9 @@ export async function POST(req: NextRequest) {
             }
 
             try {
-              await sanity.create({
+              const docId = safeConversationIdFromWamid(String(msg.id || ""));
+              await sanity.createOrReplace({
+                _id: docId,
                 _type: "whatsappConversation",
                 patientName: senderName,
                 phoneNumber,
@@ -123,10 +130,7 @@ export async function POST(req: NextRequest) {
               });
             } catch (createErr) {
               console.error("[WhatsApp Webhook] sanity.create failed for incoming message:", createErr);
-              return NextResponse.json(
-                { error: "Failed to persist incoming message" },
-                { status: 500 }
-              );
+              continue;
             }
 
             console.log(`[WhatsApp] Incoming from ${phoneNumber}: ${messageBody.substring(0, 50)}`);

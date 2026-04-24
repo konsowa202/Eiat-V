@@ -829,9 +829,10 @@ export function WhatsAppTool() {
     setMetaHeaderImageInput(defaultHeader)
   }, [selectedMetaKey, metaWaTemplates])
 
-  // Load conversations
-  const fetchConversations = useCallback(() => {
-    setLoadingLog(true)
+  // Load conversations (`silent`: no full-pane loading text — background refresh only)
+  const fetchConversations = useCallback((opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
+    if (!silent) setLoadingLog(true)
     client
       .fetch<ConversationDoc[]>(
         `*[_type == "whatsappConversation"] | order(sentAt desc)[0..499] {
@@ -840,34 +841,36 @@ export function WhatsAppTool() {
       }`,
       )
       .then((d) => setConversations(d || []))
-      .finally(() => setLoadingLog(false))
+      .finally(() => {
+        if (!silent) setLoadingLog(false)
+      })
   }, [client])
 
   useEffect(() => {
     fetchConversations()
   }, [fetchConversations])
 
-  // Auto-refresh ~every 90s; skip while typing, recording, or sending media/text (avoids breaking uploads).
+  // Auto-refresh ~every 15s; skip while typing, recording, or sending media/text (avoids breaking uploads).
   useEffect(() => {
     const interval = setInterval(() => {
       const activeTag = (document.activeElement?.tagName || '').toLowerCase()
       const inInput = activeTag === 'input' || activeTag === 'textarea'
       if (inInput || isTypingRef.current || sending || recording) return
-      void fetchConversations()
-    }, 90000)
+      void fetchConversations({ silent: true })
+    }, 15000)
     return () => clearInterval(interval)
   }, [fetchConversations, sending, recording])
 
-  // Refresh on focus/visibility only when idle, throttled to ~90s (same cadence as polling).
+  // Refresh on focus/visibility only when idle, throttled to ~15s (same cadence as polling).
   useEffect(() => {
     const maybeFetch = () => {
       if (sending || recording || isTypingRef.current) return
       const activeTag = (document.activeElement?.tagName || '').toLowerCase()
       if (activeTag === 'input' || activeTag === 'textarea') return
       const now = Date.now()
-      if (now - lastFocusFetchAtRef.current < 90000) return
+      if (now - lastFocusFetchAtRef.current < 15000) return
       lastFocusFetchAtRef.current = now
-      void fetchConversations()
+      void fetchConversations({ silent: true })
     }
     const onFocus = () => {
       maybeFetch()
@@ -980,7 +983,7 @@ export function WhatsAppTool() {
             break
           }
         }
-        setTimeout(fetchConversations, 1200)
+        setTimeout(() => void fetchConversations({ silent: true }), 1200)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
         showAlert('err', `❌ ${msg}`)
@@ -1064,7 +1067,7 @@ export function WhatsAppTool() {
       }
 
       // Refresh conversations from Sanity
-      setTimeout(fetchConversations, 1000)
+      setTimeout(() => void fetchConversations({ silent: true }), 1000)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
       showAlert('err', `❌ خطأ: ${msg}`)
@@ -1133,7 +1136,7 @@ export function WhatsAppTool() {
       }
       setXlsPreviewRows(null)
       xlsFileRef.current = null
-      setTimeout(fetchConversations, 1000)
+      setTimeout(() => void fetchConversations({ silent: true }), 1000)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
       showAlert('err', `❌ ${msg}`)
@@ -1267,9 +1270,13 @@ export function WhatsAppTool() {
       if (!data.success) {
         showAlert('err', `❌ فشل (V3.1): ${waSendFailureMessage(data)} | القالب: ${payload.templateUsed}`)
       } else {
-        showAlert('ok', `✅ تم الإرسال (V3.1)`)
+        const warn = typeof data.warning === 'string' ? data.warning.trim() : ''
+        showAlert(
+          'ok',
+          warn ? `✅ تم الإرسال (V3.1). ⚠️ ${warn}` : `✅ تم الإرسال (V3.1)`,
+        )
         setSelectedChatTpl(null)
-        setTimeout(fetchConversations, 800)
+        setTimeout(() => void fetchConversations({ silent: true }), 800)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
@@ -1370,12 +1377,18 @@ export function WhatsAppTool() {
       if (!data.success) {
         showAlert('err', `❌ فشل إرسال القالب: ${waSendFailureMessage(data)} · ${t.name}`)
       } else {
-        showAlert('ok', `✅ تم إرسال قالب فيسبوك: ${t.name}`)
+        const warn = typeof data.warning === 'string' ? data.warning.trim() : ''
+        showAlert(
+          'ok',
+          warn
+            ? `✅ وصلت للعميل (قالب ${t.name}). ⚠️ ${warn}`
+            : `✅ تم إرسال قالب فيسبوك: ${t.name}`,
+        )
         setSelectedMetaKey('')
         setMetaParamValues([])
         setMetaHeaderTextValues([])
         setMetaHeaderImageInput('')
-        setTimeout(fetchConversations, 800)
+        setTimeout(() => void fetchConversations({ silent: true }), 800)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
@@ -1417,7 +1430,7 @@ export function WhatsAppTool() {
         showAlert('err', `❌ فشل إرسال الملف: ${waSendFailureMessage(data)}`)
       } else {
         showAlert('ok', `✅ تم إرسال الملف`)
-        setTimeout(fetchConversations, 1000)
+        setTimeout(() => void fetchConversations({ silent: true }), 1000)
       }
     } catch (err: unknown) {
       showAlert('err', `❌ خطأ في الاتصال`)
@@ -1506,7 +1519,7 @@ export function WhatsAppTool() {
       await new Promise((r) => setTimeout(r, 120))
     }
     setSending(false)
-    setTimeout(fetchConversations, 1000)
+    setTimeout(() => void fetchConversations({ silent: true }), 1000)
     showAlert('ok', `📣 الإرسال الجماعي تم: ✅ ${ok} / ❌ ${fail}`)
   }
 
@@ -1542,7 +1555,7 @@ export function WhatsAppTool() {
       await new Promise((r) => setTimeout(r, 120))
     }
     setSending(false)
-    setTimeout(fetchConversations, 1200)
+    setTimeout(() => void fetchConversations({ silent: true }), 1200)
     showAlert('ok', `📣 إرسال الملف جماعيًا: ✅ ${ok} / ❌ ${fail}`)
   }
 
@@ -1676,7 +1689,7 @@ export function WhatsAppTool() {
       )
       await Promise.all(updates)
       showAlert('ok', '✅ تم حفظ اسم العميل')
-      void fetchConversations()
+      void fetchConversations({ silent: true })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'فشل حفظ الاسم'
       showAlert('err', `❌ ${msg}`)
@@ -1690,7 +1703,7 @@ export function WhatsAppTool() {
     try {
       await client.delete(msgId)
       showAlert('ok', '✅ تم حذف الرسالة')
-      void fetchConversations()
+      void fetchConversations({ silent: true })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'فشل الحذف'
       showAlert('err', `❌ ${msg}`)
@@ -1736,7 +1749,7 @@ export function WhatsAppTool() {
       await client.patch(editingMsgId).set({messageBody: newBody}).commit()
       showAlert('ok', '✅ تم تعديل الرسالة')
       setEditingMsgId(null)
-      void fetchConversations()
+      void fetchConversations({ silent: true })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'فشل التعديل'
       showAlert('err', `❌ ${msg}`)
@@ -2668,7 +2681,8 @@ export function WhatsAppTool() {
               {logTableMode ? '💬 عرض الشات' : '📋 عرض السجل كجدول'}
             </button>
             <button
-              onClick={fetchConversations}
+              type="button"
+              onClick={() => void fetchConversations({ silent: true })}
               style={{
                 background: 'rgba(0, 168, 132, 0.12)',
                 border: '1px solid rgba(0, 168, 132, 0.28)',
@@ -2856,165 +2870,200 @@ export function WhatsAppTool() {
                 boxShadow: 'var(--wa-card-shadow)',
               }}
             >
-              {/* قائمة جهات الاتصال */}
+              {/* عمود القوائم: فريم جهات الاتصال (أعلى) وفريم آخر المحادثات (أسفل) — منفصلان بوضوح */}
               <div
                 style={{
                   width: 'min(320px, 38%)',
                   borderLeft: '1px solid var(--wa-border)',
-                  overflowY: 'auto' as const,
-                  maxHeight: '72vh',
+                  overflow: 'hidden',
                   background: 'var(--wa-surface)',
+                  padding: '10px',
+                  display: 'flex',
+                  flexDirection: 'column' as const,
+                  gap: '12px',
                 }}
               >
                 <div
                   style={{
-                    padding: '10px 12px',
-                    borderBottom: '1px solid var(--wa-border)',
-                    fontSize: '12px',
-                    color: 'var(--wa-muted)',
-                    background: 'var(--wa-surface-2)',
-                    fontWeight: 700,
+                    border: '1px solid var(--wa-border)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    background: 'var(--wa-surface)',
+                    display: 'flex',
+                    flexDirection: 'column' as const,
+                    minHeight: 0,
+                    flex: '0 1 auto',
+                    maxHeight: '38vh',
                   }}
                 >
-                  💬 آخر المحادثات ({threadRowsForList.length})
-                </div>
-                {threadRowsForList.map(({th, unread}) => (
-                  <button
-                    key={th.key}
-                    type="button"
-                    className="wa-thread-item"
-                    data-active={selectedThreadKey === th.key ? 'true' : 'false'}
-                    onClick={() => {
-                      startTransition(() => {
-                        setSelectedThreadKey(th.key)
-                        setChatQuickPhone('')
-                        setCreatingNewChat(false)
-                        setSelectedChatTpl(null)
-                      })
-                    }}
+                  <div
                     style={{
-                      width: '100%',
-                      textAlign: 'right' as const,
-                      padding: '12px 14px',
-                      border: 'none',
+                      padding: '10px 12px',
                       borderBottom: '1px solid var(--wa-border)',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: 'var(--wa-text)',
-                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
-                      transition: 'background 0.12s ease',
+                      fontSize: '12px',
+                      color: 'var(--wa-muted)',
+                      background: 'var(--wa-surface-2)',
+                      fontWeight: 700,
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                        direction: 'rtl' as const,
-                      }}
-                    >
-                      <div style={{flex: 1, minWidth: 0}}>
-                        <div
-                          style={{
-                            fontWeight: unread ? 800 : 700,
-                            fontSize: '14px',
-                            color: unread ? 'var(--wa-text)' : undefined,
-                          }}
-                        >
-                          {th.displayName}
-                        </div>
+                    👤 جهات الاتصال المحفوظة ({activeContactsCount}) {loadingSavedContacts ? '…' : ''}
+                  </div>
+                  <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)'}}>
+                    <input
+                      style={{...S.input, marginBottom: 0}}
+                      placeholder="بحث في الجهات بالاسم أو الرقم..."
+                      value={contactsSearch}
+                      onChange={(e) => setContactsSearch(e.target.value)}
+                    />
+                  </div>
+                  <div style={{overflowY: 'auto' as const}}>
+                    {savedContacts.map((c) => (
+                      <button
+                        key={c._id}
+                        type="button"
+                        className="wa-thread-item"
+                        onClick={() => openSavedContact(c)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'right' as const,
+                          padding: '10px 14px',
+                          border: 'none',
+                          borderBottom: '1px dashed var(--wa-border)',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          color: 'var(--wa-text)',
+                          fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                        }}
+                      >
+                        <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
                         <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                          {th.sendPhone}
+                          {c.phoneE164}
                         </div>
-                      </div>
-                      {unread > 0 ? (
-                        <span
-                          style={{
-                            flexShrink: 0,
-                            minWidth: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            background: '#25d366',
-                            color: '#fff',
-                            fontSize: 11,
-                            fontWeight: 800,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '0 6px',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {unread > 99 ? '99+' : unread}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: unread ? 'var(--wa-text)' : 'var(--wa-muted)',
-                        marginTop: '4px',
-                        fontWeight: unread ? 600 : 400,
-                        opacity: unread ? 1 : 0.92,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap' as const,
-                      }}
-                    >
-                      {(() => {
-                        const last = th.messages[th.messages.length - 1]
-                        return last
-                          ? conversationMessageBodyForDisplay(last)?.substring(0, 42) || '—'
-                          : '—'
-                      })()}
-                    </div>
-                  </button>
-                ))}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div
                   style={{
-                    padding: '10px 12px',
-                    borderBottom: '1px solid var(--wa-border)',
-                    fontSize: '12px',
-                    color: 'var(--wa-muted)',
-                    background: 'var(--wa-surface-2)',
-                    fontWeight: 700,
+                    border: '1px solid var(--wa-border)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    background: 'var(--wa-surface)',
+                    display: 'flex',
+                    flexDirection: 'column' as const,
+                    minHeight: 0,
+                    flex: 1,
                   }}
                 >
-                  👤 جهات الاتصال المحفوظة ({activeContactsCount}) {loadingSavedContacts ? '…' : ''}
-                </div>
-                <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)'}}>
-                  <input
-                    style={{...S.input, marginBottom: 0}}
-                    placeholder="بحث في الجهات بالاسم أو الرقم..."
-                    value={contactsSearch}
-                    onChange={(e) => setContactsSearch(e.target.value)}
-                  />
-                </div>
-                {savedContacts.map((c) => (
-                  <button
-                    key={c._id}
-                    type="button"
-                    className="wa-thread-item"
-                    onClick={() => openSavedContact(c)}
+                  <div
                     style={{
-                      width: '100%',
-                      textAlign: 'right' as const,
-                      padding: '10px 14px',
-                      border: 'none',
-                      borderBottom: '1px dashed var(--wa-border)',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: 'var(--wa-text)',
-                      fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                      padding: '10px 12px',
+                      borderBottom: '1px solid var(--wa-border)',
+                      fontSize: '12px',
+                      color: 'var(--wa-muted)',
+                      background: 'var(--wa-surface-2)',
+                      fontWeight: 700,
                     }}
                   >
-                    <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
-                    <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                      {c.phoneE164}
-                    </div>
-                  </button>
-                ))}
+                    💬 آخر المحادثات ({threadRowsForList.length})
+                  </div>
+                  <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0}}>
+                    {threadRowsForList.map(({th, unread}) => (
+                      <button
+                        key={th.key}
+                        type="button"
+                        className="wa-thread-item"
+                        data-active={selectedThreadKey === th.key ? 'true' : 'false'}
+                        onClick={() => {
+                          startTransition(() => {
+                            setSelectedThreadKey(th.key)
+                            setChatQuickPhone('')
+                            setCreatingNewChat(false)
+                            setSelectedChatTpl(null)
+                          })
+                        }}
+                        style={{
+                          width: '100%',
+                          textAlign: 'right' as const,
+                          padding: '12px 14px',
+                          border: 'none',
+                          borderBottom: '1px solid var(--wa-border)',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          color: 'var(--wa-text)',
+                          fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                          transition: 'background 0.12s ease',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            direction: 'rtl' as const,
+                          }}
+                        >
+                          <div style={{flex: 1, minWidth: 0}}>
+                            <div
+                              style={{
+                                fontWeight: unread ? 800 : 700,
+                                fontSize: '14px',
+                                color: unread ? 'var(--wa-text)' : undefined,
+                              }}
+                            >
+                              {th.displayName}
+                            </div>
+                            <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                              {th.sendPhone}
+                            </div>
+                          </div>
+                          {unread > 0 ? (
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                minWidth: 22,
+                                height: 22,
+                                borderRadius: 11,
+                                background: '#25d366',
+                                color: '#fff',
+                                fontSize: 11,
+                                fontWeight: 800,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '0 6px',
+                                lineHeight: 1,
+                              }}
+                            >
+                              {unread > 99 ? '99+' : unread}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: unread ? 'var(--wa-text)' : 'var(--wa-muted)',
+                            marginTop: '4px',
+                            fontWeight: unread ? 600 : 400,
+                            opacity: unread ? 1 : 0.92,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap' as const,
+                          }}
+                        >
+                          {(() => {
+                            const last = th.messages[th.messages.length - 1]
+                            return last
+                              ? conversationMessageBodyForDisplay(last)?.substring(0, 42) || '—'
+                              : '—'
+                          })()}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* منطقة الشات */}
