@@ -7,7 +7,9 @@
     "dev": "pnpm exec next dev",
     "build": "pnpm exec next build",
     "start": "pnpm exec next start",
-    "lint": "pnpm exec next lint"
+    "lint": "pnpm exec next lint",
+    "contacts:delete-all": "node scripts/delete-all-whatsapp-contacts.mjs",
+    "contacts:delete-all:execute": "node scripts/delete-all-whatsapp-contacts.mjs --execute"
   },
   "dependencies": {
     "@sanity/client": "^7.6.0",
