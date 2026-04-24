@@ -911,7 +911,7 @@ export function WhatsAppTool() {
       URL.revokeObjectURL(url)
       showAlert(
         'ok',
-        `✅ تم تنزيل نسخة JSON (${data.count ?? 0} سجل). ${data.noteAr || ''}`.trim(),
+        `✅ تم تنزيل ملف JSON (${data.count ?? 0} سجل) — محتوى Sanity الحالي فقط، بدون إضافة رسائل من واتساب. ${data.noteAr || ''}`.trim(),
       )
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'تعذر التصدير'
@@ -2874,7 +2874,7 @@ export function WhatsAppTool() {
             </button>
             <button
               type="button"
-              title="تنزيل كل سجل whatsappConversation من Sanity كملف JSON. لا يمكن سحب تاريخ واتساب الكامل من Meta API."
+              title="تنزيل نسخة من السجلات الموجودة في Sanity كملف JSON. لا يضيف رسائل جديدة ولا يسحب تاريخاً من واتساب — Cloud API لا يوفّر ذلك؛ الوارد يصل عبر Webhook فقط."
               onClick={() => void handleExportSanityConversations()}
               disabled={exportChatsBusy}
               style={{
@@ -2889,8 +2889,21 @@ export function WhatsAppTool() {
                 fontFamily: "'Segoe UI', Tajawal, sans-serif",
               }}
             >
-              {exportChatsBusy ? '⏳ جاري التصدير...' : '💾 نسخ احتياطي (JSON من Sanity)'}
+              {exportChatsBusy ? '⏳ جاري التصدير...' : '⬇️ تصدير JSON (Sanity فقط)'}
             </button>
+          </div>
+          <div
+            style={{
+              fontSize: '11px',
+              color: 'var(--wa-muted)',
+              lineHeight: 1.55,
+              marginBottom: '12px',
+              maxWidth: '920px',
+            }}
+          >
+            التصدير يحمّل ما هو <strong>مسجّل في Sanity</strong> فقط. الرسائل التي وصلت للعميل ولم تظهر هنا لم
+            تُخزَّن في Sanity (غالباً Webhook أو صلاحيات الكتابة). واجهة Meta للواتساب لا تسمح بسحب تاريخ
+            المحادثات ودمجه تلقائياً مثل «استعادة من السيرفر».
           </div>
 
           <input
