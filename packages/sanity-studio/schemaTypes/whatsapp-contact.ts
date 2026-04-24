@@ -15,6 +15,7 @@ export default defineType({
     prepare({title, subtitle, status, source}) {
       const statusIcon: Record<string, string> = {
         active: '✅',
+        archived: '📦',
         invalid: '⚠️',
         blocked: '⛔',
       }
@@ -51,6 +52,7 @@ export default defineType({
       options: {
         list: [
           {title: 'نشط', value: 'active'},
+          {title: 'مؤرشف (مخفي من القوائم)', value: 'archived'},
           {title: 'غير صالح', value: 'invalid'},
           {title: 'محظور', value: 'blocked'},
         ],

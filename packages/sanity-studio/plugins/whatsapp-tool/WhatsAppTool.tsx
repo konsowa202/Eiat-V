@@ -667,6 +667,9 @@ export function WhatsAppTool() {
     updated?: number
   } | null>(null)
   const contactsFileRef = useRef<File | null>(null)
+  /** Bump after bulk contact changes so counts / lists refetch. */
+  const [contactsListEpoch, setContactsListEpoch] = useState(0)
+  const [archiveContactsBusy, setArchiveContactsBusy] = useState(false)
   const [longPressMenu, setLongPressMenu] = useState<{
     msgId: string
     body: string
@@ -721,7 +724,7 @@ export function WhatsAppTool() {
       .fetch<number>(`count(*[_type == "whatsappContact" && status == "active"])`)
       .then((n) => setActiveContactsCount(Number(n) || 0))
       .catch(() => setActiveContactsCount(0))
-  }, [client, contactsImportStats])
+  }, [client, contactsImportStats, contactsListEpoch])
 
   useEffect(() => {
     if (tab !== 'chats') return
@@ -751,7 +754,7 @@ export function WhatsAppTool() {
     return () => {
       cancelled = true
     }
-  }, [client, tab, contactsSearch, contactsImportStats])
+  }, [client, tab, contactsSearch, contactsImportStats, contactsListEpoch])
 
   // Load templates
   useEffect(() => {
@@ -1247,6 +1250,48 @@ export function WhatsAppTool() {
       showAlert('err', `❌ ${msg}`)
     } finally {
       setContactsBusy(false)
+    }
+  }
+
+  /** Sets every `whatsappContact` with status `active` to `archived` (hidden from UI; documents remain in Sanity). */
+  const handleArchiveAllSavedContacts = async () => {
+    if (
+      !window.confirm(
+        'سيتم إخفاء كل جهات الاتصال ذات الحالة «نشط» من القائمة (تصبح «مؤرشف»). المستندات تبقى في Sanity ولا تُحذف. متابعة؟',
+      )
+    ) {
+      return
+    }
+    if (!window.confirm('تأكيد نهائي: لن تظهر في «جهات الاتصال المحفوظة» حتى تستورد من جديد أو تغيّر الحالة من Structure. متابعة؟')) {
+      return
+    }
+    setArchiveContactsBusy(true)
+    setAlert(null)
+    let total = 0
+    try {
+      const chunk = 80
+      const parallel = 12
+      while (true) {
+        const ids = await client.fetch<string[]>(
+          `*[_type == "whatsappContact" && status == "active"][0...${chunk}]._id`,
+        )
+        if (!Array.isArray(ids) || ids.length === 0) break
+        for (let i = 0; i < ids.length; i += parallel) {
+          const slice = ids.slice(i, i + parallel)
+          await Promise.all(
+            slice.map((id) => client.patch(id).set({status: 'archived'}).commit()),
+          )
+        }
+        total += ids.length
+      }
+      showAlert('ok', `✅ تمت أرشفة ${total} جهة اتصال (نشطة → مؤرشف).`)
+      setContactsListEpoch((e) => e + 1)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'فشلت الأرشفة'
+      showAlert('err', `❌ ${msg}${total ? ` — تم أرشفة ${total} قبل الخطأ.` : ''}`)
+      setContactsListEpoch((e) => e + 1)
+    } finally {
+      setArchiveContactsBusy(false)
     }
   }
 
@@ -2628,6 +2673,36 @@ export function WhatsAppTool() {
               }}
             >
               💾 حفظ جهات الاتصال
+            </button>
+          </div>
+          <div
+            style={{
+              marginTop: '14px',
+              paddingTop: '14px',
+              borderTop: '1px dashed var(--wa-border)',
+            }}
+          >
+            <p style={{fontSize: '12px', color: 'var(--wa-muted)', lineHeight: 1.55, margin: '0 0 10px'}}>
+              <strong>أرشفة جماعية:</strong> تحوّل كل جهات الاتصال <strong>النشطة</strong> إلى حالة «مؤرشف» فلا تظهر في القائمة
+              أو الحملات، دون حذف المستندات من Sanity (لن يخفّض عدد المستندات في الحصة).
+            </p>
+            <button
+              type="button"
+              disabled={contactsBusy || archiveContactsBusy}
+              onClick={() => void handleArchiveAllSavedContacts()}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(248,113,113,0.45)',
+                background: 'rgba(248,113,113,0.12)',
+                color: '#f87171',
+                cursor: contactsBusy || archiveContactsBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              {archiveContactsBusy ? '⏳ جاري أرشفة كل النشطة…' : '📦 أرشفة كل جهات الاتصال النشطة'}
             </button>
           </div>
           {contactsImportStats ? (

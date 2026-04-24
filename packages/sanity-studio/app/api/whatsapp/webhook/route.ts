@@ -1,17 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@sanity/client";
-
-const sanity = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "f46widyg",
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
-  apiVersion: "2024-01-01",
-  token: process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN,
-  useCdn: false,
-});
-
-function sanityReady(): boolean {
-  return Boolean((process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN)?.trim());
-}
+import { sanityWriteConfigured, withSanityWriteClient } from "../sanity-write-client";
 
 function safeConversationIdFromWamid(wamid: string): string {
   const safe = (wamid || "").replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -44,10 +32,10 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    if (!sanityReady()) {
-      console.error("[WhatsApp Webhook] SANITY_API_WRITE_TOKEN is not set — cannot persist incoming messages");
+    if (!sanityWriteConfigured()) {
+      console.error("[WhatsApp Webhook] No Sanity write token — cannot persist incoming messages");
       return NextResponse.json(
-        { error: "Server misconfigured: SANITY_API_WRITE_TOKEN missing" },
+        { error: "Server misconfigured: SANITY_API_WRITE_TOKEN or SANITY_TOKEN missing" },
         { status: 503 }
       );
     }
@@ -114,20 +102,22 @@ export async function POST(req: NextRequest) {
 
             try {
               const docId = safeConversationIdFromWamid(String(msg.id || ""));
-              await sanity.createOrReplace({
-                _id: docId,
-                _type: "whatsappConversation",
-                patientName: senderName,
-                phoneNumber,
-                messageBody,
-                templateUsed: "رسالة واردة",
-                status: "sent",
-                direction: "incoming",
-                messageKind,
-                ...(waMediaId ? { waMediaId } : {}),
-                wamid: msg.id,
-                sentAt: new Date(parseInt(msg.timestamp) * 1000).toISOString(),
-              });
+              await withSanityWriteClient((client) =>
+                client.createOrReplace({
+                  _id: docId,
+                  _type: "whatsappConversation",
+                  patientName: senderName,
+                  phoneNumber,
+                  messageBody,
+                  templateUsed: "رسالة واردة",
+                  status: "sent",
+                  direction: "incoming",
+                  messageKind,
+                  ...(waMediaId ? { waMediaId } : {}),
+                  wamid: msg.id,
+                  sentAt: new Date(parseInt(msg.timestamp) * 1000).toISOString(),
+                }),
+              );
             } catch (createErr) {
               console.error("[WhatsApp Webhook] sanity.create failed for incoming message:", createErr);
               continue;
@@ -150,27 +140,29 @@ export async function POST(req: NextRequest) {
             const newStatus = statusMap[st.status];
             if (!newStatus) continue;
 
-            const existing = await sanity.fetch<{ _id: string }[]>(
-              `*[_type == "whatsappConversation" && wamid == $wamid][0..0]{ _id }`,
-              { wamid: st.id }
-            );
+            await withSanityWriteClient(async (client) => {
+              const existing = await client.fetch<{ _id: string }[]>(
+                `*[_type == "whatsappConversation" && wamid == $wamid][0..0]{ _id }`,
+                { wamid: st.id },
+              );
 
-            if (existing?.length > 0) {
-              await sanity
-                .patch(existing[0]._id)
-                .set({
-                  status: newStatus,
-                  ...(st.status === "failed"
-                    ? {
-                        errorMessage:
-                          st.errors?.[0]?.title || st.errors?.[0]?.message || "فشل الإرسال",
-                      }
-                    : {}),
-                })
-                .commit();
+              if (existing?.length > 0) {
+                await client
+                  .patch(existing[0]._id)
+                  .set({
+                    status: newStatus,
+                    ...(st.status === "failed"
+                      ? {
+                          errorMessage:
+                            st.errors?.[0]?.title || st.errors?.[0]?.message || "فشل الإرسال",
+                        }
+                      : {}),
+                  })
+                  .commit();
 
-              console.log(`[WhatsApp] Status update: ${st.id} → ${newStatus}`);
-            }
+                console.log(`[WhatsApp] Status update: ${st.id} → ${newStatus}`);
+              }
+            });
           }
         }
       }

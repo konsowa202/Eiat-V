@@ -1,15 +1,7 @@
 import { NextRequest } from "next/server";
 import { jsonCors, emptyCors } from "../studio-cors";
-import { createClient } from "@sanity/client";
 import { waAccessToken, waPhoneNumberId } from "../wa-env";
-
-const sanity = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "f46widyg",
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
-  apiVersion: "2024-01-01",
-  token: process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN,
-  useCdn: false,
-});
+import { withSanityWriteClient } from "../sanity-write-client";
 
 const WA_PHONE_ID = waPhoneNumberId();
 const GRAPH = `https://graph.facebook.com/v21.0`;
@@ -182,18 +174,20 @@ export async function POST(req: NextRequest) {
     if (!upRes.ok) {
       const errMsg = upData?.error?.message || `HTTP ${upRes.status}`;
       const errCode = upData?.error?.code || "";
-      await sanity.create({
-        _type: "whatsappConversation",
-        patientName,
-        phoneNumber: `+${num}`,
-        messageBody: caption || `[${kind}]`,
-        templateUsed,
-        status: "failed",
-        direction: "outgoing",
-        messageKind: kind,
-        sentAt: new Date().toISOString(),
-        errorMessage: `[${errCode}] ${errMsg}`,
-      });
+      await withSanityWriteClient((client) =>
+        client.create({
+          _type: "whatsappConversation",
+          patientName,
+          phoneNumber: `+${num}`,
+          messageBody: caption || `[${kind}]`,
+          templateUsed,
+          status: "failed",
+          direction: "outgoing",
+          messageKind: kind,
+          sentAt: new Date().toISOString(),
+          errorMessage: `[${errCode}] ${errMsg}`,
+        }),
+      );
       return jsonCors(
         { success: false, error: `[${errCode}] ${errMsg}` },
         { status: 400 }
@@ -274,19 +268,21 @@ export async function POST(req: NextRequest) {
     if (!waRes.ok && isReengagementError(waData)) {
       const reopen = await sendOpenConversationTemplate({ to: num, token: WA_TOKEN });
       if (!reopen.ok) {
-        await sanity.create({
-          _type: "whatsappConversation",
-          patientName,
-          phoneNumber: `+${num}`,
-          messageBody: caption || `[${kind}]`,
-          templateUsed,
-          status: "failed",
-          direction: "outgoing",
-          messageKind: kind,
-          waMediaId: mediaId,
-          sentAt: new Date().toISOString(),
-          errorMessage: `Re-engagement failed: ${reopen.error || "unknown error"}`,
-        });
+        await withSanityWriteClient((client) =>
+          client.create({
+            _type: "whatsappConversation",
+            patientName,
+            phoneNumber: `+${num}`,
+            messageBody: caption || `[${kind}]`,
+            templateUsed,
+            status: "failed",
+            direction: "outgoing",
+            messageKind: kind,
+            waMediaId: mediaId,
+            sentAt: new Date().toISOString(),
+            errorMessage: `Re-engagement failed: ${reopen.error || "unknown error"}`,
+          }),
+        );
         return jsonCors(
           { success: false, error: `Re-engagement failed: ${reopen.error || "unknown error"}` },
           { status: 400 }
@@ -299,19 +295,21 @@ export async function POST(req: NextRequest) {
     if (!waRes.ok) {
       const errMsg = waData?.error?.message || `HTTP ${waRes.status}`;
       const errCode = waData?.error?.code || "";
-      await sanity.create({
-        _type: "whatsappConversation",
-        patientName,
-        phoneNumber: `+${num}`,
-        messageBody: caption || `[${kind}]`,
-        templateUsed,
-        status: "failed",
-        direction: "outgoing",
-        messageKind: kind,
-        waMediaId: mediaId,
-        sentAt: new Date().toISOString(),
-        errorMessage: `[${errCode}] ${errMsg}`,
-      });
+      await withSanityWriteClient((client) =>
+        client.create({
+          _type: "whatsappConversation",
+          patientName,
+          phoneNumber: `+${num}`,
+          messageBody: caption || `[${kind}]`,
+          templateUsed,
+          status: "failed",
+          direction: "outgoing",
+          messageKind: kind,
+          waMediaId: mediaId,
+          sentAt: new Date().toISOString(),
+          errorMessage: `[${errCode}] ${errMsg}`,
+        }),
+      );
       return jsonCors(
         { success: false, error: `[${errCode}] ${errMsg}` },
         { status: 400 }
@@ -320,19 +318,21 @@ export async function POST(req: NextRequest) {
 
     const wamid = waData?.messages?.[0]?.id || "";
 
-    await sanity.create({
-      _type: "whatsappConversation",
-      patientName,
-      phoneNumber: `+${num}`,
-      messageBody: caption || `[${kind}]`,
-      templateUsed,
-      status: "sent",
-      direction: "outgoing",
-      messageKind: kind,
-      waMediaId: mediaId,
-      wamid,
-      sentAt: new Date().toISOString(),
-    });
+    await withSanityWriteClient((client) =>
+      client.create({
+        _type: "whatsappConversation",
+        patientName,
+        phoneNumber: `+${num}`,
+        messageBody: caption || `[${kind}]`,
+        templateUsed,
+        status: "sent",
+        direction: "outgoing",
+        messageKind: kind,
+        waMediaId: mediaId,
+        wamid,
+        sentAt: new Date().toISOString(),
+      }),
+    );
 
     return jsonCors({
       success: true,
