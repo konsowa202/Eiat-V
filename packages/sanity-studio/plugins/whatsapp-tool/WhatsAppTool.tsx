@@ -623,6 +623,7 @@ export function WhatsAppTool() {
 
   const [sending, setSending] = useState(false)
   const [refreshingChats, setRefreshingChats] = useState(false)
+  const [exportChatsBusy, setExportChatsBusy] = useState(false)
   const [alert, setAlert] = useState<{type: 'ok' | 'err'; msg: string} | null>(null)
   const [searchLog, setSearchLog] = useState('')
   const [contactsSearch, setContactsSearch] = useState('')
@@ -883,6 +884,42 @@ export function WhatsAppTool() {
     await fetchConversations({silent: false, onError: 'alert'})
     setRefreshingChats(false)
   }, [fetchConversations, refreshingChats])
+
+  const handleExportSanityConversations = useCallback(async () => {
+    if (exportChatsBusy) return
+    setExportChatsBusy(true)
+    try {
+      const res = await fetch(waApiAbs('/api/whatsapp/export-conversations'), {cache: 'no-store'})
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        count?: number
+        conversations?: unknown[]
+        noteAr?: string
+      } | null
+      if (!res.ok || !data?.ok) {
+        showAlert('err', `❌ ${data?.error || `HTTP ${res.status}`}`)
+        return
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json;charset=utf-8'})
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `whatsapp-conversations-sanity-${todayISO()}.json`
+      a.rel = 'noopener'
+      a.click()
+      URL.revokeObjectURL(url)
+      showAlert(
+        'ok',
+        `✅ تم تنزيل نسخة JSON (${data.count ?? 0} سجل). ${data.noteAr || ''}`.trim(),
+      )
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'تعذر التصدير'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setExportChatsBusy(false)
+    }
+  }, [exportChatsBusy, showAlert])
 
   useEffect(() => {
     fetchConversations()
@@ -2783,7 +2820,14 @@ export function WhatsAppTool() {
       {/* ═══ CHATS TAB (واجهة شات) ═══ */}
       {tab === 'chats' && (
         <div
-          style={{...S.card}}
+          style={{
+            ...S.card,
+            display: 'flex',
+            flexDirection: 'column' as const,
+            maxHeight: 'min(920px, calc(100dvh - 160px))',
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
         >
           <div
             style={{
@@ -2828,15 +2872,43 @@ export function WhatsAppTool() {
             >
               {refreshingChats ? '⏳ جاري التحديث...' : '🔄 تحديث'}
             </button>
+            <button
+              type="button"
+              title="تنزيل كل سجل whatsappConversation من Sanity كملف JSON. لا يمكن سحب تاريخ واتساب الكامل من Meta API."
+              onClick={() => void handleExportSanityConversations()}
+              disabled={exportChatsBusy}
+              style={{
+                background: 'rgba(59, 130, 246, 0.12)',
+                border: '1px solid rgba(59, 130, 246, 0.35)',
+                borderRadius: '8px',
+                color: '#60a5fa',
+                padding: '6px 14px',
+                cursor: exportChatsBusy ? 'not-allowed' : 'pointer',
+                opacity: exportChatsBusy ? 0.65 : 1,
+                fontSize: '12px',
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              {exportChatsBusy ? '⏳ جاري التصدير...' : '💾 نسخ احتياطي (JSON من Sanity)'}
+            </button>
           </div>
 
           <input
-            style={{...S.input, marginBottom: '16px'}}
+            style={{...S.input, marginBottom: '16px', flexShrink: 0}}
             placeholder="🔍 ابحث في المحادثات (اسم/رقم/نص)..."
             value={searchLog}
             onChange={(e) => setSearchLog(e.target.value)}
           />
 
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column' as const,
+              overflow: 'hidden',
+            }}
+          >
           {loadingLog ? (
             <div style={S.empty}>جاري تحميل المحادثات...</div>
           ) : logTableMode ? (
@@ -2994,7 +3066,9 @@ export function WhatsAppTool() {
               style={{
                 display: 'flex',
                 gap: 0,
-                minHeight: '560px',
+                flex: 1,
+                minHeight: 0,
+                maxHeight: '100%',
                 borderRadius: '8px',
                 overflow: 'hidden',
                 border: '1px solid var(--wa-border)',
@@ -3013,6 +3087,8 @@ export function WhatsAppTool() {
                   display: 'flex',
                   flexDirection: 'column' as const,
                   gap: '12px',
+                  minHeight: 0,
+                  alignSelf: 'stretch',
                 }}
               >
                 <div
@@ -3040,7 +3116,7 @@ export function WhatsAppTool() {
                   >
                     👤 جهات الاتصال المحفوظة ({activeContactsCount}) {loadingSavedContacts ? '…' : ''}
                   </div>
-                  <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)'}}>
+                  <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)', flexShrink: 0}}>
                     <input
                       style={{...S.input, marginBottom: 0}}
                       placeholder="بحث في الجهات بالاسم أو الرقم..."
@@ -3048,7 +3124,7 @@ export function WhatsAppTool() {
                       onChange={(e) => setContactsSearch(e.target.value)}
                     />
                   </div>
-                  <div style={{overflowY: 'auto' as const}}>
+                  <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0}}>
                     {savedContacts.map((c) => (
                       <button
                         key={c._id}
@@ -3199,16 +3275,34 @@ export function WhatsAppTool() {
               </div>
 
               {/* منطقة الشات */}
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column' as const, minWidth: 0}}>
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column' as const,
+                  minWidth: 0,
+                  minHeight: 0,
+                  overflow: 'hidden',
+                }}
+              >
                 {!activeThread ? (
                   <div style={{...S.empty, flex: 1}}>اختر محادثة من القائمة</div>
                 ) : (
-                  <>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column' as const,
+                      flex: 1,
+                      minHeight: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
                     <div
                       style={{
                         padding: '12px 16px',
                         borderBottom: '1px solid var(--wa-border)',
                         background: 'var(--wa-chat-header)',
+                        flexShrink: 0,
                       }}
                     >
                       <div style={{display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' as const}}>
@@ -3305,12 +3399,12 @@ export function WhatsAppTool() {
                       className="wa-msg-scroll"
                       style={{
                         flex: 1,
+                        minHeight: 0,
                         overflowY: 'auto' as const,
                         padding: '16px 14px 20px',
                         display: 'flex',
                         flexDirection: 'column' as const,
                         gap: '6px',
-                        maxHeight: '54vh',
                       }}
                       onClick={() => {
                         if (suppressNextChatClickRef.current) {
@@ -3529,6 +3623,7 @@ export function WhatsAppTool() {
                         padding: '12px 14px',
                         borderTop: '1px solid var(--wa-border)',
                         background: 'var(--wa-composer)',
+                        flexShrink: 0,
                       }}
                     >
                       {alert && (
@@ -3834,11 +3929,12 @@ export function WhatsAppTool() {
                         </div>
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
