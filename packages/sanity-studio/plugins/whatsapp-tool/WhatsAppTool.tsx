@@ -669,7 +669,7 @@ export function WhatsAppTool() {
   const contactsFileRef = useRef<File | null>(null)
   /** Bump after bulk contact changes so counts / lists refetch. */
   const [contactsListEpoch, setContactsListEpoch] = useState(0)
-  const [archiveContactsBusy, setArchiveContactsBusy] = useState(false)
+  const [deleteContactsBusy, setDeleteContactsBusy] = useState(false)
   const [longPressMenu, setLongPressMenu] = useState<{
     msgId: string
     body: string
@@ -1253,45 +1253,43 @@ export function WhatsAppTool() {
     }
   }
 
-  /** Sets every `whatsappContact` with status `active` to `archived` (hidden from UI; documents remain in Sanity). */
-  const handleArchiveAllSavedContacts = async () => {
+  /** Deletes every `whatsappContact` document (any status). Does not touch `whatsappConversation`. */
+  const handleDeleteAllSavedContacts = async () => {
     if (
       !window.confirm(
-        'سيتم إخفاء كل جهات الاتصال ذات الحالة «نشط» من القائمة (تصبح «مؤرشف»). المستندات تبقى في Sanity ولا تُحذف. متابعة؟',
+        'سيتم حذف جميع مستندات «جهات اتصال واتساب» (whatsappContact) من Sanity نهائيًا.\n\nسجل المحادثات (آخر المحادثات / whatsappConversation) لن يُمس.\n\nمتابعة؟',
       )
     ) {
       return
     }
-    if (!window.confirm('تأكيد نهائي: لن تظهر في «جهات الاتصال المحفوظة» حتى تستورد من جديد أو تغيّر الحالة من Structure. متابعة؟')) {
+    if (
+      !window.confirm(
+        'تأكيد نهائي: الحذف من Sanity لا يمكن التراجع عنه من الواجهة. هل أنت متأكد؟',
+      )
+    ) {
       return
     }
-    setArchiveContactsBusy(true)
+    setDeleteContactsBusy(true)
     setAlert(null)
     let total = 0
     try {
       const chunk = 80
-      const parallel = 12
       while (true) {
-        const ids = await client.fetch<string[]>(
-          `*[_type == "whatsappContact" && status == "active"][0...${chunk}]._id`,
-        )
+        const ids = await client.fetch<string[]>(`*[_type == "whatsappContact"][0...${chunk}]._id`)
         if (!Array.isArray(ids) || ids.length === 0) break
-        for (let i = 0; i < ids.length; i += parallel) {
-          const slice = ids.slice(i, i + parallel)
-          await Promise.all(
-            slice.map((id) => client.patch(id).set({status: 'archived'}).commit()),
-          )
-        }
+        const trx = client.transaction()
+        for (const id of ids) trx.delete(id)
+        await trx.commit()
         total += ids.length
       }
-      showAlert('ok', `✅ تمت أرشفة ${total} جهة اتصال (نشطة → مؤرشف).`)
+      showAlert('ok', `✅ تم حذف ${total} جهة اتصال من Sanity. سجل المحادثات كما هو.`)
       setContactsListEpoch((e) => e + 1)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'فشلت الأرشفة'
-      showAlert('err', `❌ ${msg}${total ? ` — تم أرشفة ${total} قبل الخطأ.` : ''}`)
+      const msg = err instanceof Error ? err.message : 'فشل الحذف'
+      showAlert('err', `❌ ${msg}${total ? ` — تم حذف ${total} قبل الخطأ.` : ''}`)
       setContactsListEpoch((e) => e + 1)
     } finally {
-      setArchiveContactsBusy(false)
+      setDeleteContactsBusy(false)
     }
   }
 
@@ -2683,26 +2681,27 @@ export function WhatsAppTool() {
             }}
           >
             <p style={{fontSize: '12px', color: 'var(--wa-muted)', lineHeight: 1.55, margin: '0 0 10px'}}>
-              <strong>أرشفة جماعية:</strong> تحوّل كل جهات الاتصال <strong>النشطة</strong> إلى حالة «مؤرشف» فلا تظهر في القائمة
-              أو الحملات، دون حذف المستندات من Sanity (لن يخفّض عدد المستندات في الحصة).
+              <strong>حذف جماعي:</strong> يحذف كل مستندات نوع <strong>جهات اتصال واتساب</strong> من Sanity (يقلّل عدد
+              المستندات في الحصة). <strong>آخر المحادثات</strong> (نوع <code dir="ltr">whatsappConversation</code>) لا
+              تتأثر.
             </p>
             <button
               type="button"
-              disabled={contactsBusy || archiveContactsBusy}
-              onClick={() => void handleArchiveAllSavedContacts()}
+              disabled={contactsBusy || deleteContactsBusy}
+              onClick={() => void handleDeleteAllSavedContacts()}
               style={{
                 padding: '8px 14px',
                 borderRadius: '8px',
-                border: '1px solid rgba(248,113,113,0.45)',
-                background: 'rgba(248,113,113,0.12)',
-                color: '#f87171',
-                cursor: contactsBusy || archiveContactsBusy ? 'not-allowed' : 'pointer',
+                border: '1px solid rgba(220,38,38,0.55)',
+                background: 'rgba(220,38,38,0.14)',
+                color: '#dc2626',
+                cursor: contactsBusy || deleteContactsBusy ? 'not-allowed' : 'pointer',
                 fontSize: '13px',
-                fontWeight: 600,
+                fontWeight: 700,
                 fontFamily: "'Segoe UI', Tajawal, sans-serif",
               }}
             >
-              {archiveContactsBusy ? '⏳ جاري أرشفة كل النشطة…' : '📦 أرشفة كل جهات الاتصال النشطة'}
+              {deleteContactsBusy ? '⏳ جاري حذف جهات الاتصال…' : '🗑️ حذف كل جهات الاتصال من Sanity'}
             </button>
           </div>
           {contactsImportStats ? (
