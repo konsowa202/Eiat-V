@@ -624,6 +624,9 @@ export function WhatsAppTool() {
   const [sending, setSending] = useState(false)
   const [refreshingChats, setRefreshingChats] = useState(false)
   const [exportChatsBusy, setExportChatsBusy] = useState(false)
+  const [replayWebhookBusy, setReplayWebhookBusy] = useState(false)
+  const [replayPayloadText, setReplayPayloadText] = useState('')
+  const [replayTokenInput, setReplayTokenInput] = useState('')
   const [alert, setAlert] = useState<{type: 'ok' | 'err'; msg: string} | null>(null)
   const [searchLog, setSearchLog] = useState('')
   const [contactsSearch, setContactsSearch] = useState('')
@@ -911,7 +914,7 @@ export function WhatsAppTool() {
       URL.revokeObjectURL(url)
       showAlert(
         'ok',
-        `✅ تم تنزيل ملف JSON (${data.count ?? 0} سجل) — محتوى Sanity الحالي فقط، بدون إضافة رسائل من واتساب. ${data.noteAr || ''}`.trim(),
+        `✅ تم تنزيل نسخة JSON (${data.count ?? 0} سجل). ${data.noteAr || ''}`.trim(),
       )
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'تعذر التصدير'
@@ -920,6 +923,44 @@ export function WhatsAppTool() {
       setExportChatsBusy(false)
     }
   }, [exportChatsBusy, showAlert])
+
+  const handleReplayWebhookToSanity = useCallback(async () => {
+    if (replayWebhookBusy) return
+    setReplayWebhookBusy(true)
+    try {
+      let payload: unknown
+      try {
+        payload = JSON.parse((replayPayloadText || '').trim() || '{}')
+      } catch {
+        showAlert('err', '❌ محتوى المربع ليس JSON صالحًا')
+        return
+      }
+      const res = await fetch(waApiAbs('/api/whatsapp/replay-webhook'), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          replayToken: replayTokenInput.trim(),
+          payload,
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        messageAr?: string
+      } | null
+      if (!res.ok || !data?.ok) {
+        showAlert('err', `❌ ${data?.error || `HTTP ${res.status}`}`)
+        return
+      }
+      showAlert('ok', data.messageAr || '✅ تمت المعالجة')
+      await fetchConversations({silent: false, onError: 'silent'})
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'تعذر الاتصال بالخادم'
+      showAlert('err', `❌ ${msg}`)
+    } finally {
+      setReplayWebhookBusy(false)
+    }
+  }, [replayWebhookBusy, replayPayloadText, replayTokenInput, fetchConversations, showAlert])
 
   useEffect(() => {
     fetchConversations()
@@ -2874,7 +2915,7 @@ export function WhatsAppTool() {
             </button>
             <button
               type="button"
-              title="تنزيل نسخة من السجلات الموجودة في Sanity كملف JSON. لا يضيف رسائل جديدة ولا يسحب تاريخاً من واتساب — Cloud API لا يوفّر ذلك؛ الوارد يصل عبر Webhook فقط."
+              title="تنزيل أرشيف من Sanity فقط. لا يجلب رسائل جديدة من واتساب ولا يصلح الرسائل الناقصة."
               onClick={() => void handleExportSanityConversations()}
               disabled={exportChatsBusy}
               style={{
@@ -2889,22 +2930,68 @@ export function WhatsAppTool() {
                 fontFamily: "'Segoe UI', Tajawal, sans-serif",
               }}
             >
-              {exportChatsBusy ? '⏳ جاري التصدير...' : '⬇️ تصدير JSON (Sanity فقط)'}
+              {exportChatsBusy ? '⏳ جاري التصدير...' : '📥 أرشيف JSON من Sanity (للتنزيل فقط)'}
             </button>
           </div>
-          <div
+
+          <details
             style={{
-              fontSize: '11px',
+              marginBottom: '14px',
+              fontSize: '12px',
               color: 'var(--wa-muted)',
-              lineHeight: 1.55,
-              marginBottom: '12px',
-              maxWidth: '920px',
+              border: '1px solid var(--wa-border)',
+              borderRadius: '10px',
+              padding: '10px 12px',
+              flexShrink: 0,
+              background: 'var(--wa-surface-2)',
             }}
           >
-            التصدير يحمّل ما هو <strong>مسجّل في Sanity</strong> فقط. الرسائل التي وصلت للعميل ولم تظهر هنا لم
-            تُخزَّن في Sanity (غالباً Webhook أو صلاحيات الكتابة). واجهة Meta للواتساب لا تسمح بسحب تاريخ
-            المحادثات ودمجه تلقائياً مثل «استعادة من السيرفر».
-          </div>
+            <summary style={{cursor: 'pointer', fontWeight: 700, color: 'var(--wa-text)'}}>
+              ↩️ استعادة واردة إلى Sanity (لصق JSON الـ Webhook من Meta أو Vercel)
+            </summary>
+            <p style={{margin: '10px 0 8px', lineHeight: 1.55}}>
+              <strong>مهم:</strong> Meta لا تعطي API لسحب «صندوق الوارد» من الخادم. الرسائل الواردة تصل عبر الـ Webhook فقط. إذا كان Sanity متوقفًا أو 403،
+              انسخ <strong>نفس جسم الطلب</strong> الذي أرسله Meta (من سجلات Vercel أو أداة اختبار الـ Webhook) والصقه هنا — سيُعاد حفظه في Sanity. يتطلب تعيين{' '}
+              <code dir="ltr" style={{fontSize: '11px'}}>WHATSAPP_WEBHOOK_REPLAY_TOKEN</code> في Vercel ثم إدخال نفس القيمة أدناه.
+            </p>
+            <label style={{...S.label, marginTop: '6px'}}>رمز الاستعادة (يطابق المتغير على الخادم)</label>
+            <input
+              type="password"
+              autoComplete="off"
+              style={{...S.input, marginBottom: '10px'}}
+              placeholder="WHATSAPP_WEBHOOK_REPLAY_TOKEN"
+              value={replayTokenInput}
+              onChange={(e) => setReplayTokenInput(e.target.value)}
+              dir="ltr"
+            />
+            <label style={{...S.label}}>JSON الـ Webhook (object: whatsapp_business_account)</label>
+            <textarea
+              style={{...S.textarea, minHeight: '140px', fontFamily: 'ui-monospace,monospace', fontSize: '11px'}}
+              placeholder='{"object":"whatsapp_business_account","entry":[...]}'
+              value={replayPayloadText}
+              onChange={(e) => setReplayPayloadText(e.target.value)}
+              dir="ltr"
+            />
+            <button
+              type="button"
+              disabled={replayWebhookBusy}
+              onClick={() => void handleReplayWebhookToSanity()}
+              style={{
+                marginTop: '10px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(37,211,102,0.45)',
+                background: 'rgba(37,211,102,0.14)',
+                color: '#16a34a',
+                cursor: replayWebhookBusy ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 700,
+                fontFamily: "'Segoe UI', Tajawal, sans-serif",
+              }}
+            >
+              {replayWebhookBusy ? '⏳ جاري الكتابة في Sanity...' : '✅ تطبيق على Sanity'}
+            </button>
+          </details>
 
           <input
             style={{...S.input, marginBottom: '16px', flexShrink: 0}}
