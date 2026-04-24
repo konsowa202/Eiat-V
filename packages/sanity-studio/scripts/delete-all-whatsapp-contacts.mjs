@@ -8,7 +8,7 @@
  *   pnpm exec node scripts/delete-all-whatsapp-contacts.mjs --execute  # delete
  *
  * Env: SANITY_API_WRITE_TOKEN or SANITY_TOKEN (Editor). Optional: NEXT_PUBLIC_SANITY_PROJECT_ID, NEXT_PUBLIC_SANITY_DATASET.
- * Loads missing keys from `.env.local` here or in `../eiat-site/.env.local` (does not override existing env).
+ * Loads `.env.local` from `../eiat-site` first, then this package (studio wins on duplicate keys).
  */
 
 import { createClient } from '@sanity/client'
@@ -19,7 +19,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkgRoot = path.resolve(__dirname, '..')
 
-function mergeEnvFromFile(absPath) {
+/** @param {{ override?: boolean }} opts - if override, keys in this file replace existing process.env */
+function mergeEnvFromFile(absPath, opts = {}) {
+  const override = opts.override === true
   if (!fs.existsSync(absPath)) return
   const raw = fs.readFileSync(absPath, 'utf8')
   for (const line of raw.split(/\r?\n/)) {
@@ -36,13 +38,18 @@ function mergeEnvFromFile(absPath) {
     ) {
       val = val.slice(1, -1)
     }
-    if (key && process.env[key] === undefined) process.env[key] = val
+    if (key && (override || process.env[key] === undefined)) process.env[key] = val
   }
 }
 
-mergeEnvFromFile(path.join(pkgRoot, '.env.local'))
-mergeEnvFromFile(path.join(pkgRoot, '../eiat-site/.env.local'))
+mergeEnvFromFile(path.join(pkgRoot, '../eiat-site/.env.local'), {override: false})
+mergeEnvFromFile(path.join(pkgRoot, '.env.local'), {override: true})
 
+const tokenFrom = process.env.SANITY_API_WRITE_TOKEN?.trim()
+  ? 'SANITY_API_WRITE_TOKEN'
+  : process.env.SANITY_TOKEN?.trim()
+    ? 'SANITY_TOKEN'
+    : ''
 const token = (process.env.SANITY_API_WRITE_TOKEN || process.env.SANITY_TOKEN || '').trim()
 const projectId = (process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'f46widyg').trim()
 const dataset = (process.env.NEXT_PUBLIC_SANITY_DATASET || 'production').trim()
@@ -51,6 +58,11 @@ const execute = process.argv.includes('--execute')
 if (!token) {
   console.error('Missing SANITY_API_WRITE_TOKEN or SANITY_TOKEN. Set in env or .env.local (studio or eiat-site).')
   process.exit(1)
+}
+if (tokenFrom === 'SANITY_TOKEN' && execute) {
+  console.warn(
+    '\n⚠️  Using SANITY_TOKEN only. If deletes fail with 403, create an Editor API token and set SANITY_API_WRITE_TOKEN in packages/sanity-studio/.env.local\n',
+  )
 }
 
 const client = createClient({
@@ -68,6 +80,7 @@ async function main() {
   const contactCount = await client.fetch(`count(*[_type == "whatsappContact"])`)
 
   console.log(`Project: ${projectId}  Dataset: ${dataset}`)
+  console.log(`Token env var used: ${tokenFrom || '(inline)'}`)
   console.log(`whatsappConversation (unchanged): ${convCount}`)
   console.log(`whatsappContact (to delete):      ${contactCount}`)
 
@@ -95,6 +108,18 @@ async function main() {
 }
 
 main().catch((e) => {
+  const code = e?.statusCode ?? e?.response?.statusCode
+  const desc = e?.details?.description || e?.message || String(e)
+  if (code === 403 || String(desc).includes('Insufficient permissions')) {
+    console.error('\n── Sanity 403 / صلاحيات ──')
+    console.error('التوكن الحالي لا يملك صلاحية update/delete على هذا الـ dataset.')
+    console.error('الحل:')
+    console.error('  1) sanity.io/manage → Project → API → Add API token → دور Editor')
+    console.error('  2) ضع القيمة في: packages/sanity-studio/.env.local')
+    console.error('     SANITY_API_WRITE_TOKEN=sk...')
+    console.error('  (ملف الاستوديو يطغى على eiat-site بعد التحديث الأخير للسكربت)')
+    console.error('────────────────────────\n')
+  }
   console.error(e)
   process.exit(1)
 })
