@@ -622,6 +622,7 @@ export function WhatsAppTool() {
   const [doctorName, setDoctorName] = useState('')
 
   const [sending, setSending] = useState(false)
+  const [refreshingChats, setRefreshingChats] = useState(false)
   const [alert, setAlert] = useState<{type: 'ok' | 'err'; msg: string} | null>(null)
   const [searchLog, setSearchLog] = useState('')
   const [contactsSearch, setContactsSearch] = useState('')
@@ -691,6 +692,27 @@ export function WhatsAppTool() {
     clearTimeout(alertTimer.current)
     alertTimer.current = setTimeout(() => setAlert(null), 6000)
   }, [])
+
+  const appendOptimisticOutgoingMessage = useCallback(
+    (input: {phone: string; body: string; patientName?: string; templateUsed?: string; wamid?: string}) => {
+      const normalizedPhone = normalizePhone(input.phone)
+      if (!normalizedPhone || !input.body.trim()) return
+      const nowIso = new Date().toISOString()
+      const optimistic: ConversationDoc = {
+        _id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        patientName: (input.patientName || '').trim() || 'من المحادثات',
+        phoneNumber: normalizedPhone,
+        messageBody: input.body.trim(),
+        templateUsed: input.templateUsed || 'رسالة مخصصة',
+        status: 'sent',
+        direction: 'outgoing',
+        sentAt: nowIso,
+        ...(input.wamid ? {wamid: input.wamid} : {}),
+      }
+      setConversations((prev) => [optimistic, ...prev].slice(0, 500))
+    },
+    [],
+  )
 
   const isLight = theme === 'light'
 
@@ -830,7 +852,7 @@ export function WhatsAppTool() {
   }, [selectedMetaKey, metaWaTemplates])
 
   // Load conversations (`silent`: no full-pane loading text — background refresh only)
-  const fetchConversations = useCallback((opts?: { silent?: boolean }) => {
+  const fetchConversations = useCallback((opts?: {silent?: boolean; onError?: 'silent' | 'alert'}) => {
     const silent = opts?.silent === true
     if (!silent) setLoadingLog(true)
     client
@@ -841,10 +863,23 @@ export function WhatsAppTool() {
       }`,
       )
       .then((d) => setConversations(d || []))
+      .catch((err: unknown) => {
+        if (opts?.onError === 'alert') {
+          const msg = err instanceof Error ? err.message : 'تعذر تحديث المحادثات'
+          showAlert('err', `❌ ${msg}`)
+        }
+      })
       .finally(() => {
         if (!silent) setLoadingLog(false)
       })
-  }, [client])
+  }, [client, showAlert])
+
+  const refreshConversationsManually = useCallback(async () => {
+    if (refreshingChats) return
+    setRefreshingChats(true)
+    await fetchConversations({silent: false, onError: 'alert'})
+    setRefreshingChats(false)
+  }, [fetchConversations, refreshingChats])
 
   useEffect(() => {
     fetchConversations()
@@ -1271,6 +1306,13 @@ export function WhatsAppTool() {
         showAlert('err', `❌ فشل (V3.1): ${waSendFailureMessage(data)} | القالب: ${payload.templateUsed}`)
       } else {
         const warn = typeof data.warning === 'string' ? data.warning.trim() : ''
+        appendOptimisticOutgoingMessage({
+          phone: chatPhoneToSend,
+          body: payload.message || (selectedChatTpl?.messageBody || text),
+          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          templateUsed: payload.templateUsed,
+          wamid: typeof data.wamid === 'string' ? data.wamid : undefined,
+        })
         showAlert(
           'ok',
           warn ? `✅ تم الإرسال (V3.1). ⚠️ ${warn}` : `✅ تم الإرسال (V3.1)`,
@@ -1378,6 +1420,13 @@ export function WhatsAppTool() {
         showAlert('err', `❌ فشل إرسال القالب: ${waSendFailureMessage(data)} · ${t.name}`)
       } else {
         const warn = typeof data.warning === 'string' ? data.warning.trim() : ''
+        appendOptimisticOutgoingMessage({
+          phone: phoneToSend,
+          body: messageBodyForSanity,
+          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          templateUsed: t.name,
+          wamid: typeof data.wamid === 'string' ? data.wamid : undefined,
+        })
         showAlert(
           'ok',
           warn
@@ -1429,6 +1478,13 @@ export function WhatsAppTool() {
       if (!data.success) {
         showAlert('err', `❌ فشل إرسال الملف: ${waSendFailureMessage(data)}`)
       } else {
+        appendOptimisticOutgoingMessage({
+          phone: targetPhone,
+          body: (customCaption ?? '').trim() || `[${file.type || 'media'}]`,
+          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          templateUsed: 'ميديا',
+          wamid: typeof data.wamid === 'string' ? data.wamid : undefined,
+        })
         showAlert('ok', `✅ تم إرسال الملف`)
         setTimeout(() => void fetchConversations({ silent: true }), 1000)
       }
@@ -2682,19 +2738,21 @@ export function WhatsAppTool() {
             </button>
             <button
               type="button"
-              onClick={() => void fetchConversations({ silent: true })}
+              onClick={() => void refreshConversationsManually()}
+              disabled={refreshingChats}
               style={{
                 background: 'rgba(0, 168, 132, 0.12)',
                 border: '1px solid rgba(0, 168, 132, 0.28)',
                 borderRadius: '8px',
                 color: 'var(--wa-brand)',
                 padding: '6px 14px',
-                cursor: 'pointer',
+                cursor: refreshingChats ? 'not-allowed' : 'pointer',
+                opacity: refreshingChats ? 0.65 : 1,
                 fontSize: '12px',
                 fontFamily: "'Segoe UI', Tajawal, sans-serif",
               }}
             >
-              🔄 تحديث
+              {refreshingChats ? '⏳ جاري التحديث...' : '🔄 تحديث'}
             </button>
           </div>
 
