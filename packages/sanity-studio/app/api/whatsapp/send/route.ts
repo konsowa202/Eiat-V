@@ -24,8 +24,7 @@ const WA_PHONE_ID = waPhoneNumberId();
 const WA_TOKEN = waAccessToken();
 const GRAPH = "https://graph.facebook.com/v21.0";
 
-// Meta-hosted Media ID for the clinic logo (Permanent and reliable)
-const LOGO_MEDIA_ID = "890336857379800";
+const DEFAULT_TEMPLATE_IMAGE_LINK = "https://eiat-v.vercel.app/wa-logo.jpg";
 
 const imageBuilder = createImageUrlBuilder({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "f46widyg",
@@ -153,7 +152,7 @@ function resolveHeaderImageHttps(meta: MetaTemplateSendPayload): string | null {
       return null;
     }
   }
-  return null;
+  return DEFAULT_TEMPLATE_IMAGE_LINK;
 }
 
 /** Meta often caps each BODY text variable at 30 chars (marketing/utility); longer values cause (#100) Invalid parameter. */
@@ -194,18 +193,11 @@ function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): {
       parameters: headerTextVals.map((text) => ({ type: "text", text })),
     });
   } else if (headerFormat === "IMAGE") {
-    const httpsUrl = resolveHeaderImageHttps(meta);
-    if (httpsUrl) {
-      components.push({
-        type: "header",
-        parameters: [{ type: "image", image: { link: httpsUrl } }],
-      });
-    } else {
-      components.push({
-        type: "header",
-        parameters: [{ type: "image", image: { id: LOGO_MEDIA_ID } }],
-      });
-    }
+    const httpsUrl = resolveHeaderImageHttps(meta) || DEFAULT_TEMPLATE_IMAGE_LINK;
+    components.push({
+      type: "header",
+      parameters: [{ type: "image", image: { link: httpsUrl } }],
+    });
   }
 
   if (bodyVals.length > 0) {
@@ -373,7 +365,7 @@ export async function POST(req: NextRequest) {
         if (config.hasHeaderImage) {
           components.push({
             type: "header",
-            parameters: [{ type: "image", image: { id: LOGO_MEDIA_ID } }],
+            parameters: [{ type: "image", image: { link: DEFAULT_TEMPLATE_IMAGE_LINK } }],
           });
         }
 

@@ -3,6 +3,7 @@ import {useClient} from 'sanity'
 
 /** Production Next app (WhatsApp API routes). Override with SANITY_STUDIO_WA_SITE_ORIGIN in .env */
 const DEFAULT_WA_SITE_ORIGIN = 'https://eiat-v.vercel.app'
+const DEFAULT_TEMPLATE_IMAGE_LINK = 'https://eiat-v.vercel.app/wa-logo.jpg'
 
 /**
  * Origin of the site that serves `/api/whatsapp/*` (Next on Vercel).
@@ -714,6 +715,7 @@ export function WhatsAppTool() {
   const [logFilter, setLogFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
+  const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
   const [creatingNewChat, setCreatingNewChat] = useState(false)
   const [logTableMode, setLogTableMode] = useState(false)
   const [broadcastMode, setBroadcastMode] = useState(false)
@@ -933,9 +935,7 @@ export function WhatsAppTool() {
     // Global Defaults for specific templates
     if (t.name === 'eiat' || t.name === 'eiat1') {
       if (t.headerFormat === 'IMAGE') {
-        // Same file: packages/sanity-studio/public/wa-logo.jpg → served at /wa-logo.jpg on this deploy
-        const origin = (typeof window !== 'undefined' ? getWaSiteOrigin() : '') || DEFAULT_WA_SITE_ORIGIN
-        defaultHeader = `${origin.replace(/\/$/, '')}/wa-logo.jpg`
+        defaultHeader = DEFAULT_TEMPLATE_IMAGE_LINK
       }
       // No body params to fill if count is 0
     }
@@ -1469,7 +1469,7 @@ export function WhatsAppTool() {
 
     let targetPhone = ''
     if (selectedThreadKey) {
-      targetPhone = activeThread?.sendPhone || ''
+      targetPhone = effectiveActiveThread?.sendPhone || ''
     } else if (chatQuickPhone.trim()) {
       targetPhone = normalizePhone(chatQuickPhone)
     } else {
@@ -1490,10 +1490,10 @@ export function WhatsAppTool() {
       const payload = {
         phone: chatPhoneToSend,
         message: selectedChatTpl ? (selectedChatTpl.messageBody || '') : text,
-        patientName: activeThread?.displayName || 'من المحادثات',
+        patientName: effectiveActiveThread?.displayName || 'من المحادثات',
         templateUsed: selectedChatTpl ? selectedChatTpl.name : 'رد سريع',
         templateParams: {
-          patientName: activeThread?.displayName || patientName || 'عميلنا العزيز',
+          patientName: effectiveActiveThread?.displayName || patientName || 'عميلنا العزيز',
           appointmentDate: appointmentDate || new Date().toLocaleDateString('ar-SA'),
           doctorName: doctorName || 'عيادات إيات',
           location: 'حي الأندلس، جدة',
@@ -1516,7 +1516,7 @@ export function WhatsAppTool() {
         appendOptimisticOutgoingMessage({
           phone: chatPhoneToSend,
           body: payload.message || (selectedChatTpl?.messageBody || text),
-          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          patientName: effectiveActiveThread?.displayName || patientName || 'من المحادثات',
           templateUsed: payload.templateUsed,
           wamid: typeof data.wamid === 'string' ? data.wamid : undefined,
         })
@@ -1562,7 +1562,7 @@ export function WhatsAppTool() {
 
     let targetPhone = ''
     if (selectedThreadKey) {
-      targetPhone = activeThread?.sendPhone || ''
+      targetPhone = effectiveActiveThread?.sendPhone || ''
     } else if (chatQuickPhone.trim()) {
       targetPhone = normalizePhone(chatQuickPhone)
     } else {
@@ -1608,7 +1608,7 @@ export function WhatsAppTool() {
         body: JSON.stringify({
           phone: phoneToSend,
           message: messageBodyForSanity,
-          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          patientName: effectiveActiveThread?.displayName || patientName || 'من المحادثات',
           templateUsed: t.name,
           metaTemplate: {
             name: t.name,
@@ -1630,7 +1630,7 @@ export function WhatsAppTool() {
         appendOptimisticOutgoingMessage({
           phone: phoneToSend,
           body: messageBodyForSanity,
-          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          patientName: effectiveActiveThread?.displayName || patientName || 'من المحادثات',
           templateUsed: t.name,
           wamid: typeof data.wamid === 'string' ? data.wamid : undefined,
         })
@@ -1657,7 +1657,7 @@ export function WhatsAppTool() {
   const handleChatMedia = async (file: File, customCaption?: string) => {
     let targetPhone = ''
     if (selectedThreadKey) {
-      targetPhone = activeThread?.sendPhone || ''
+      targetPhone = effectiveActiveThread?.sendPhone || ''
     } else if (chatQuickPhone.trim()) {
       targetPhone = normalizePhone(chatQuickPhone)
     } else {
@@ -1688,7 +1688,7 @@ export function WhatsAppTool() {
         appendOptimisticOutgoingMessage({
           phone: targetPhone,
           body: (customCaption ?? '').trim() || `[${file.type || 'media'}]`,
-          patientName: activeThread?.displayName || patientName || 'من المحادثات',
+          patientName: effectiveActiveThread?.displayName || patientName || 'من المحادثات',
           templateUsed: 'ميديا',
           wamid: typeof data.wamid === 'string' ? data.wamid : undefined,
         })
@@ -1866,16 +1866,20 @@ export function WhatsAppTool() {
     [threads, selectedThreadKey],
   )
 
-  const openSavedContact = useCallback(
-    (c: SavedContact) => {
-      const normalized = normalizePhone(c.phoneE164 || c.phoneDigits || '')
-      if (!normalized) return
+  const openOrCreateChatByPhone = useCallback(
+    (rawPhone: string, opts?: {suggestedName?: string}) => {
+      const normalized = normalizePhone(rawPhone)
+      if (!normalized) {
+        showAlert('err', '⚠️ أدخل رقم واتساب صحيح')
+        return false
+      }
       const existing = threads.find((t) => t.sendPhone === normalized)
       if (existing) {
         startTransition(() => {
           setSelectedThreadKey(existing.key)
           setCreatingNewChat(false)
           setChatQuickPhone('')
+          setSidebarNewChatPhone('')
           setSelectedChatTpl(null)
         })
       } else {
@@ -1883,14 +1887,41 @@ export function WhatsAppTool() {
           setSelectedThreadKey(null)
           setCreatingNewChat(true)
           setChatQuickPhone(normalized)
-          setPatientName((c.name || '').trim())
-          setChatNameDraft((c.name || '').trim())
+          setSidebarNewChatPhone('')
           setSelectedChatTpl(null)
         })
+        const suggested = (opts?.suggestedName || '').trim()
+        if (suggested) {
+          setPatientName(suggested)
+          setChatNameDraft(suggested)
+        }
       }
+      return true
     },
-    [threads],
+    [threads, showAlert],
   )
+
+  const openSavedContact = useCallback(
+    (c: SavedContact) => {
+      void openOrCreateChatByPhone(c.phoneE164 || c.phoneDigits || '', {suggestedName: c.name || ''})
+    },
+    [openOrCreateChatByPhone],
+  )
+
+  const draftThread = useMemo<WaThread | null>(() => {
+    if (!creatingNewChat) return null
+    const normalized = normalizePhone(chatQuickPhone)
+    if (!normalized) return null
+    return {
+      key: `draft:${normalized}`,
+      sendPhone: normalized,
+      displayName: patientName.trim() || 'محادثة جديدة',
+      messages: [],
+      lastAt: Date.now(),
+    }
+  }, [creatingNewChat, chatQuickPhone, patientName])
+
+  const effectiveActiveThread = activeThread || draftThread
 
   const lastReadMsForThread = useCallback(
     (th: WaThread) => {
@@ -2031,13 +2062,6 @@ export function WhatsAppTool() {
       startTransition(() => setSelectedThreadKey(filteredThreads[0].key))
     }
   }, [tab, filteredThreads, selectedThreadKey])
-
-  useEffect(() => {
-    if (!creatingNewChat) return
-    requestAnimationFrame(() => {
-      newChatPhoneInputRef.current?.focus()
-    })
-  }, [creatingNewChat])
 
   useEffect(() => {
     if (tab !== 'chats' || logTableMode) return
@@ -3285,6 +3309,67 @@ export function WhatsAppTool() {
                     background: 'var(--wa-surface)',
                     display: 'flex',
                     flexDirection: 'column' as const,
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderBottom: '1px solid var(--wa-border)',
+                      fontSize: '12px',
+                      color: 'var(--wa-muted)',
+                      background: 'var(--wa-surface-2)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    ➕ إضافة / فتح محادثة
+                  </div>
+                  <div style={{padding: '8px 12px'}}>
+                    <div style={{display: 'flex', gap: '6px', alignItems: 'center'}}>
+                      <input
+                        ref={newChatPhoneInputRef}
+                        style={{...S.input, marginBottom: 0, fontSize: '12px'}}
+                        placeholder="اكتب الرقم ثم Enter"
+                        value={sidebarNewChatPhone}
+                        onChange={(e) => setSidebarNewChatPhone(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          e.preventDefault()
+                          void openOrCreateChatByPhone(sidebarNewChatPhone)
+                        }}
+                        dir="ltr"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void openOrCreateChatByPhone(sidebarNewChatPhone)}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(37,211,102,0.35)',
+                          background: 'rgba(37,211,102,0.12)',
+                          color: '#16a34a',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        فتح
+                      </button>
+                    </div>
+                    <div style={{fontSize: '10px', color: 'var(--wa-muted)', marginTop: '6px'}}>
+                      يفتح الشات مباشرة لو موجود، أو ينشئ محادثة جديدة فورًا على نفس الرقم.
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: '1px solid var(--wa-border)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    background: 'var(--wa-surface)',
+                    display: 'flex',
+                    flexDirection: 'column' as const,
                     minHeight: 0,
                     flex: '0 1 auto',
                     maxHeight: '38vh',
@@ -3471,7 +3556,7 @@ export function WhatsAppTool() {
                   overflow: 'hidden',
                 }}
               >
-                {!activeThread ? (
+                {!effectiveActiveThread ? (
                   <div style={{...S.empty, flex: 1}}>اختر محادثة من القائمة</div>
                 ) : (
                   <div
@@ -3493,8 +3578,8 @@ export function WhatsAppTool() {
                     >
                       <div style={{display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' as const}}>
                         <input
-                          value={chatNameDraft}
-                          onChange={(e) => setChatNameDraft(e.target.value)}
+                          value={activeThread ? chatNameDraft : patientName}
+                          onChange={(e) => (activeThread ? setChatNameDraft(e.target.value) : setPatientName(e.target.value))}
                           style={{
                             ...S.input,
                             marginBottom: 0,
@@ -3503,22 +3588,23 @@ export function WhatsAppTool() {
                             fontSize: '14px',
                           }}
                           placeholder="اسم العميل"
+                          disabled={!activeThread}
                         />
                         <button
                           type="button"
                           onClick={() => void handleSaveChatName()}
-                          disabled={savingChatName}
+                          disabled={savingChatName || !activeThread}
                           style={{
                             padding: '8px 12px',
                             borderRadius: '8px',
                             border: '1px solid rgba(37,211,102,0.35)',
                             background: 'rgba(37,211,102,0.13)',
                             color: '#16a34a',
-                            cursor: savingChatName ? 'not-allowed' : 'pointer',
+                            cursor: savingChatName || !activeThread ? 'not-allowed' : 'pointer',
                             fontSize: '12px',
                           }}
                         >
-                          {savingChatName ? '...' : '💾 حفظ الاسم'}
+                          {!activeThread ? 'اسم غير محفوظ' : savingChatName ? '...' : '💾 حفظ الاسم'}
                         </button>
                       </div>
                       <div
@@ -3529,7 +3615,7 @@ export function WhatsAppTool() {
                           marginTop: '6px',
                         }}
                       >
-                        {activeThread.sendPhone}
+                        {effectiveActiveThread.sendPhone}
                       </div>
                     </div>
                     {/* Long-press context menu */}
@@ -3600,7 +3686,7 @@ export function WhatsAppTool() {
                         setLongPressMenu(null)
                       }}
                     >
-                      {activeThread.messages.map((c) => {
+                      {effectiveActiveThread.messages.map((c) => {
                         const out = c.direction === 'outgoing'
                         const kind = c.messageKind || 'text'
                         const src = c.waMediaId ? mediaSrc(c.waMediaId) : ''
@@ -3817,44 +3903,11 @@ export function WhatsAppTool() {
                           {alert.msg}
                         </div>
                       )}
-                      {selectedThreadKey && !creatingNewChat ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCreatingNewChat(true)
-                            setSelectedThreadKey(null)
-                          }}
-                          style={{
-                            marginBottom: '10px',
-                            padding: '8px 12px',
-                            borderRadius: '10px',
-                            border: '1px solid rgba(37,211,102,0.35)',
-                            background: 'rgba(37,211,102,0.12)',
-                            color: '#16a34a',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            fontFamily: "'Segoe UI',Tajawal,sans-serif",
-                          }}
-                        >
-                          ＋ إضافة محادثة جديدة
-                        </button>
-                      ) : (
-                        <>
-                          <label style={{...S.label, marginBottom: '6px'}}>ابدأ محادثة جديدة</label>
-                          <input
-                            ref={newChatPhoneInputRef}
-                            style={{...S.input, marginBottom: '6px'}}
-                            placeholder="اكتب الرقم فقط: 5XXXXXXXX أو +2010XXXXXXX"
-                            value={chatQuickPhone}
-                            onChange={(e) => setChatQuickPhone(e.target.value)}
-                            dir="ltr"
-                          />
-                          <div style={{fontSize: '11px', color: 'var(--wa-muted)', marginBottom: '10px'}}>
-                            المحلي يتحول تلقائيًا إلى +966.
-                          </div>
-                        </>
-                      )}
+                      {creatingNewChat ? (
+                        <div style={{fontSize: '11px', color: 'var(--wa-muted)', marginBottom: '10px'}}>
+                          محادثة جديدة على: <strong dir="ltr">{chatQuickPhone}</strong>
+                        </div>
+                      ) : null}
                       <label style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
                         <input
                           type="checkbox"
@@ -4093,7 +4146,7 @@ export function WhatsAppTool() {
                           ) : null}
                         <WhatsAppComposer
                           editingMsgId={editingMsgId}
-                          initialValue={editingMsgId ? activeThread.messages.find(m => m._id === editingMsgId)?.messageBody || '' : ''}
+                          initialValue={editingMsgId ? effectiveActiveThread.messages.find(m => m._id === editingMsgId)?.messageBody || '' : ''}
                           sending={sending}
                           recording={recording}
                           savingEdit={savingEdit}
