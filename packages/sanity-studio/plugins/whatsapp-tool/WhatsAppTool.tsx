@@ -101,6 +101,75 @@ function fillMetaBodyPlaceholders(bodyText: string, values: string[]): string {
   return out.trim() || (bodyText || '').trim()
 }
 
+type MetaVarKind = 'name' | 'date' | 'service' | 'doctor' | 'location' | 'reference' | 'generic'
+
+type MetaParamHint = {
+  label: string
+  placeholder: string
+  defaultValue: string
+  kind: MetaVarKind
+}
+
+function inferMetaVarKindFromContext(raw: string): MetaVarKind {
+  const c = raw.toLowerCase()
+  if (/(اسم|عميل|مريض|customer|patient|client|name)/i.test(c)) return 'name'
+  if (/(موعد|تاريخ|وقت|date|time|slot|schedule)/i.test(c)) return 'date'
+  if (/(خدمة|جلسة|خطة|إجراء|service|treatment|procedure|package)/i.test(c)) return 'service'
+  if (/(طبيب|دكتور|doctor|provider|consultant)/i.test(c)) return 'doctor'
+  if (/(فرع|موقع|عنوان|location|branch|address)/i.test(c)) return 'location'
+  if (/(مرجع|رقم|كود|رمز|ref|reference|code|id)/i.test(c)) return 'reference'
+  return 'generic'
+}
+
+function metaVarUiCopy(kind: MetaVarKind, idx: number): {label: string; placeholder: string} {
+  if (kind === 'name') return {label: `اسم العميل (${idx})`, placeholder: 'مثال: محمد أحمد'}
+  if (kind === 'date') return {label: `الموعد / التاريخ (${idx})`, placeholder: 'مثال: 2026-04-27 10:30'}
+  if (kind === 'service') return {label: `الخدمة / الإجراء (${idx})`, placeholder: 'مثال: تنظيف وتلميع'}
+  if (kind === 'doctor') return {label: `اسم الطبيب (${idx})`, placeholder: 'مثال: د. أحمد'}
+  if (kind === 'location') return {label: `الفرع / الموقع (${idx})`, placeholder: 'مثال: حي الأندلس، جدة'}
+  if (kind === 'reference') return {label: `رقم المرجع (${idx})`, placeholder: 'مثال: CNF-2045'}
+  return {label: `القيمة ${idx}`, placeholder: `أدخل القيمة ${idx}`}
+}
+
+function buildMetaBodyParamHints(
+  t: MetaWaTemplateRow,
+  defaults: {patientName: string; appointmentDate: string; doctorName: string},
+): MetaParamHint[] {
+  const count = Math.max(0, t.bodyVariableCount || 0)
+  if (count === 0) return []
+
+  const normalizedBody = (t.bodyText || '').replace(/\s+/g, ' ')
+  const contextByIndex = new Map<number, string>()
+  const re = /\{\{(\d+)\}\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(normalizedBody))) {
+    const idx = Math.max(1, Number(m[1] || 0))
+    if (!idx) continue
+    const from = Math.max(0, m.index - 28)
+    const to = Math.min(normalizedBody.length, m.index + m[0].length + 28)
+    contextByIndex.set(idx, normalizedBody.slice(from, to))
+  }
+
+  return Array.from({length: count}, (_, i) => {
+    const idx = i + 1
+    const ctx = contextByIndex.get(idx) || `${t.name} ${normalizedBody}`
+    const kind = inferMetaVarKindFromContext(ctx)
+    const ui = metaVarUiCopy(kind, idx)
+    let defaultValue = ''
+    if (kind === 'name') defaultValue = defaults.patientName
+    else if (kind === 'date') defaultValue = defaults.appointmentDate
+    else if (kind === 'doctor') defaultValue = defaults.doctorName
+    else if (kind === 'location') defaultValue = 'حي الأندلس، جدة'
+    else if (kind === 'reference') defaultValue = `REF-${todayISO()}`
+    return {
+      label: ui.label,
+      placeholder: ui.placeholder,
+      defaultValue,
+      kind,
+    }
+  })
+}
+
 /** Dashboard / Sanity bubble text when Meta `bodyText` is empty but we have parameter values. */
 function formatMetaTemplateSanityPreviewForChat(t: MetaWaTemplateRow, values: string[]): string {
   const v = values.map((x) => String(x ?? '').trim())
@@ -621,6 +690,18 @@ export function WhatsAppTool() {
   const [appointmentDate, setAppointmentDate] = useState('')
   const [doctorName, setDoctorName] = useState('')
 
+  const selectedMetaParamHints = useMemo(
+    () =>
+      selectedMetaTpl
+        ? buildMetaBodyParamHints(selectedMetaTpl, {
+            patientName: patientName.trim() || 'عميلنا العزيز',
+            appointmentDate: appointmentDate.trim() || todayISO(),
+            doctorName: doctorName.trim() || 'عيادات إيات',
+          })
+        : [],
+    [selectedMetaTpl, patientName, appointmentDate, doctorName],
+  )
+
   const [sending, setSending] = useState(false)
   const [refreshingChats, setRefreshingChats] = useState(false)
   const [exportChatsBusy, setExportChatsBusy] = useState(false)
@@ -839,7 +920,12 @@ export function WhatsAppTool() {
       return
     }
 
-    const defaultParams = Array.from({length: Math.max(0, t.bodyVariableCount)}, () => '')
+    const hints = buildMetaBodyParamHints(t, {
+      patientName: patientName.trim() || 'عميلنا العزيز',
+      appointmentDate: appointmentDate.trim() || todayISO(),
+      doctorName: doctorName.trim() || 'عيادات إيات',
+    })
+    const defaultParams = hints.map((h) => h.defaultValue)
     const hVar = Math.max(0, t.headerVariableCount ?? 0)
     setMetaHeaderTextValues(Array.from({length: hVar}, () => ''))
     let defaultHeader = ''
@@ -856,7 +942,7 @@ export function WhatsAppTool() {
 
     setMetaParamValues(defaultParams)
     setMetaHeaderImageInput(defaultHeader)
-  }, [selectedMetaKey, metaWaTemplates])
+  }, [selectedMetaKey, metaWaTemplates, patientName, appointmentDate, doctorName])
 
   // Load conversations (`silent`: no full-pane loading text — background refresh only)
   const fetchConversations = useCallback((opts?: {silent?: boolean; onError?: 'silent' | 'alert'}) => {
@@ -3934,21 +4020,19 @@ export function WhatsAppTool() {
                               <span style={{fontSize: '11px', color: 'var(--wa-muted)', fontWeight: 600}}>
                                 متغيرات القالب بالترتيب (مثل {'{{1}}'}، {'{{2}}'} في مدير فيسبوك)
                               </span>
+                              <span style={{fontSize: '10px', color: 'var(--wa-muted)'}}>
+                                الاسم: {selectedMetaTpl.name} · عدد المتغيرات: {selectedMetaTpl.bodyVariableCount}
+                              </span>
                               {Array.from({length: selectedMetaTpl.bodyVariableCount}, (_, i) => {
-                                let label = `القيمة ${i + 1}`
-                                if (selectedMetaTpl.name === 'confirmation') {
-                                  if (i === 0) label = 'اسم العميل'
-                                  if (i === 1) label = 'الموعد'
-                                  if (i === 2) label = 'الخدمة المحجوزة'
-                                  if (i === 3) label = 'رقم التأكيد'
-                                }
+                                const hint = selectedMetaParamHints[i]
+                                const label = hint?.label || `القيمة ${i + 1}`
                                 return (
                                   <div key={i} style={{marginBottom: '6px'}}>
                                     <label style={{...S.label, fontSize: '10px', marginBottom: '2px'}}>{label}</label>
                                     <input
                                       dir="auto"
                                       style={{...S.input, marginBottom: 0, fontSize: '13px'}}
-                                      placeholder={label}
+                                      placeholder={hint?.placeholder || label}
                                       value={metaParamValues[i] ?? ''}
                                       onChange={(e) => {
                                         const v = e.target.value
