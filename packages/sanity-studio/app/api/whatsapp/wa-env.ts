@@ -13,5 +13,5 @@ export function waPhoneNumberId(): string {
 
 export function waBusinessAccountId(): string {
   const raw = (process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || process.env.WA_BUSINESS_ACCOUNT_ID || "").trim();
-  return raw || "495811770284793";
+  return raw || "1650904936252257";
 }

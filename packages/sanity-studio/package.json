@@ -8,6 +8,7 @@
     "build": "pnpm exec next build",
     "start": "pnpm exec next start",
     "lint": "pnpm exec next lint",
+    "templates:sync-meta": "node scripts/sync-meta-templates-to-sanity.mjs",
     "contacts:delete-all": "node scripts/delete-all-whatsapp-contacts.mjs",
     "contacts:delete-all:execute": "node scripts/delete-all-whatsapp-contacts.mjs --execute"
   },
