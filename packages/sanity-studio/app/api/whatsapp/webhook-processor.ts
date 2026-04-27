@@ -46,6 +46,7 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
             document?: { filename?: string; id?: string };
             audio?: { id?: string };
             video?: { id?: string };
+            reaction?: { emoji?: string; message_id?: string };
             location?: { latitude?: number; longitude?: number };
             button?: { text?: string };
             interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
@@ -79,6 +80,13 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
             messageBody = "[فيديو]";
             messageKind = "video";
             waMediaId = msg.video?.id;
+          } else if (msg.type === "reaction") {
+            const emoji = (msg.reaction?.emoji || "").trim();
+            const target = (msg.reaction?.message_id || "").trim();
+            messageBody = emoji
+              ? `تفاعل على رسالة: ${emoji}${target ? ` (${target.slice(-8)})` : ""}`
+              : "[تفاعل]";
+            messageKind = "text";
           } else if (msg.type === "location") {
             messageBody = `[موقع] ${msg.location?.latitude}, ${msg.location?.longitude}`;
             messageKind = "unknown";

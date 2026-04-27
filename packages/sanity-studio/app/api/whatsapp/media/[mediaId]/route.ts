@@ -7,7 +7,7 @@ const GRAPH = `https://graph.facebook.com/v21.0`;
  * Proxies WhatsApp Cloud media: resolves Graph media id → binary (token kept server-side).
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ mediaId: string }> }
 ) {
   const WA_TOKEN = waAccessToken();
@@ -40,8 +40,12 @@ export async function GET(
       return NextResponse.json({ error: "No media URL" }, { status: 502 });
     }
 
+    const range = (req.headers.get("range") || "").trim();
     const binRes = await fetch(url, {
-      headers: { Authorization: `Bearer ${WA_TOKEN}` },
+      headers: {
+        Authorization: `Bearer ${WA_TOKEN}`,
+        ...(range ? { Range: range } : {}),
+      },
     });
 
     if (!binRes.ok) {
@@ -52,11 +56,17 @@ export async function GET(
     }
 
     const buf = await binRes.arrayBuffer();
+    const contentLength = binRes.headers.get("content-length");
+    const contentRange = binRes.headers.get("content-range");
+    const acceptRanges = binRes.headers.get("accept-ranges") || "bytes";
     return new NextResponse(buf, {
-      status: 200,
+      status: binRes.status,
       headers: {
         "Content-Type": mime,
         "Cache-Control": "private, max-age=300",
+        "Accept-Ranges": acceptRanges,
+        ...(contentLength ? { "Content-Length": contentLength } : {}),
+        ...(contentRange ? { "Content-Range": contentRange } : {}),
       },
     });
   } catch (e) {
