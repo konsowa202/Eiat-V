@@ -1468,7 +1468,9 @@ export function WhatsAppTool() {
     if (!text && !selectedChatTpl) return showAlert('err', '⚠️ اكتب رسالة أو اختر قالب')
 
     let targetPhone = ''
-    if (selectedThreadKey) {
+    if (creatingNewChat && chatQuickPhone.trim()) {
+      targetPhone = normalizePhone(chatQuickPhone)
+    } else if (selectedThreadKey) {
       targetPhone = effectiveActiveThread?.sendPhone || ''
     } else if (chatQuickPhone.trim()) {
       targetPhone = normalizePhone(chatQuickPhone)
@@ -1561,7 +1563,9 @@ export function WhatsAppTool() {
     }
 
     let targetPhone = ''
-    if (selectedThreadKey) {
+    if (creatingNewChat && chatQuickPhone.trim()) {
+      targetPhone = normalizePhone(chatQuickPhone)
+    } else if (selectedThreadKey) {
       targetPhone = effectiveActiveThread?.sendPhone || ''
     } else if (chatQuickPhone.trim()) {
       targetPhone = normalizePhone(chatQuickPhone)
@@ -1656,7 +1660,9 @@ export function WhatsAppTool() {
 
   const handleChatMedia = async (file: File, customCaption?: string) => {
     let targetPhone = ''
-    if (selectedThreadKey) {
+    if (creatingNewChat && chatQuickPhone.trim()) {
+      targetPhone = normalizePhone(chatQuickPhone)
+    } else if (selectedThreadKey) {
       targetPhone = effectiveActiveThread?.sendPhone || ''
     } else if (chatQuickPhone.trim()) {
       targetPhone = normalizePhone(chatQuickPhone)
@@ -2054,6 +2060,7 @@ export function WhatsAppTool() {
 
   useEffect(() => {
     if (tab !== 'chats') return
+    if (creatingNewChat) return
     if (!filteredThreads.length) {
       startTransition(() => setSelectedThreadKey(null))
       return
@@ -2061,7 +2068,7 @@ export function WhatsAppTool() {
     if (!selectedThreadKey || !filteredThreads.some((t) => t.key === selectedThreadKey)) {
       startTransition(() => setSelectedThreadKey(filteredThreads[0].key))
     }
-  }, [tab, filteredThreads, selectedThreadKey])
+  }, [tab, filteredThreads, selectedThreadKey, creatingNewChat])
 
   useEffect(() => {
     if (tab !== 'chats' || logTableMode) return
