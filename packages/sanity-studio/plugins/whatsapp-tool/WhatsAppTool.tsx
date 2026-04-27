@@ -731,7 +731,7 @@ export function WhatsAppTool() {
     failed: number
   } | null>(null)
   const [recording, setRecording] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setTheme] = useState<'dark' | 'light'>('light')
   const [savedContacts, setSavedContacts] = useState<SavedContact[]>([])
   const [loadingSavedContacts, setLoadingSavedContacts] = useState(false)
   const [chatNameDraft, setChatNameDraft] = useState('')
@@ -3296,7 +3296,7 @@ export function WhatsAppTool() {
               {/* عمود القوائم: فريم جهات الاتصال (أعلى) وفريم آخر المحادثات (أسفل) — منفصلان بوضوح */}
               <div
                 style={{
-                  width: 'min(320px, 38%)',
+                  width: 'min(280px, 30%)',
                   borderLeft: '1px solid var(--wa-border)',
                   overflow: 'hidden',
                   background: 'var(--wa-surface)',
