@@ -41,6 +41,13 @@ type MetaTemplateSpec = {
   headerVariableCount: number
 }
 
+function expectedBodyParamCountForBatch(templateName: string, resolvedCount: number): number {
+  const t = String(templateName || "").trim().toLowerCase();
+  // XLS parser extracts exactly 4 ordered fields for confirmation flow.
+  if (t === "confirmation" || t.includes("confirm")) return 4;
+  return Math.max(0, resolvedCount || 0);
+}
+
 async function resolveMetaTemplateSpec(
   templateName: string,
   preferredLanguageCode: string,
@@ -104,7 +111,10 @@ export async function POST(req: NextRequest) {
     const preferredLanguageCode = String(form.get("languageCode") || "ar").trim() || "ar";
     const templateSpec = await resolveMetaTemplateSpec(templateName, preferredLanguageCode).catch(() => null);
     const languageCode = templateSpec?.languageCode || preferredLanguageCode;
-    const bodyParamCount = templateSpec ? templateSpec.bodyVariableCount : 4;
+    const bodyParamCount = expectedBodyParamCountForBatch(
+      templateName,
+      templateSpec ? templateSpec.bodyVariableCount : 4,
+    );
     const headerFormat = templateSpec?.headerFormat || "NONE";
     const headerParamValues =
       headerFormat === "TEXT" && (templateSpec?.headerVariableCount || 0) > 0
@@ -121,7 +131,7 @@ export async function POST(req: NextRequest) {
     const preview = rows.map((r) => ({
       rowIndex: r.rowIndex,
       phone: r.phoneRaw,
-      bodyParameterValues: confirmationParams(r),
+      bodyParameterValues: confirmationParams(r).slice(0, bodyParamCount),
       parseWarnings: r.parseWarnings,
     }));
 
