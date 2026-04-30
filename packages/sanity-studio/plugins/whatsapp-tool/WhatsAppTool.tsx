@@ -4056,7 +4056,7 @@ export function WhatsAppTool() {
                                 flexDirection: 'column' as const,
                                 gap: '6px',
                                 padding: '8px 0 4px',
-                                maxHeight: '150px',
+                                maxHeight: '120px',
                                 overflowY: 'auto' as const,
                                 paddingLeft: '2px',
                               }}
@@ -4097,7 +4097,7 @@ export function WhatsAppTool() {
                                 flexDirection: 'column' as const,
                                 gap: '6px',
                                 padding: '8px 0 4px',
-                                maxHeight: '220px',
+                                maxHeight: '140px',
                                 overflowY: 'auto' as const,
                                 paddingLeft: '2px',
                               }}
@@ -4167,6 +4167,8 @@ export function WhatsAppTool() {
                                 padding: '4px 2px 0',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word' as const,
+                                maxHeight: '88px',
+                                overflowY: 'auto' as const,
                               }}
                             >
                               <span style={{fontWeight: 700}}>معاينة: </span>
@@ -4397,7 +4399,7 @@ const WhatsAppComposer = memo(({
   }
 
   return (
-    <div style={{display: 'flex', gap: '12px', padding: '12px 16px', background: 'var(--wa-chat-header)'}}>
+    <div style={{display: 'flex', gap: '10px', padding: '10px 12px', background: 'var(--wa-chat-header)', alignItems: 'stretch'}}>
       <div style={{flex: 1, display: 'flex', flexDirection: 'column' as const}}>
         {editingMsgId ? (
           <div style={{
@@ -4465,12 +4467,12 @@ const WhatsAppComposer = memo(({
           >📋</button>
         </div>
       </div>
-      <div style={{display: 'flex', flexDirection: 'column' as const, gap: '8px'}}>
+      <div style={{display: 'flex', flexDirection: 'column' as const, gap: '8px', minWidth: '122px', width: '122px'}}>
         <label
           style={{
-            padding: '10px 14px', background: 'rgba(56,189,248,0.15)',
+            padding: '9px 10px', background: 'rgba(56,189,248,0.15)',
             border: '1px solid rgba(56,189,248,0.35)', borderRadius: '10px',
-            cursor: sending ? 'not-allowed' : 'pointer', fontSize: '12px', textAlign: 'center' as const,
+            cursor: sending ? 'not-allowed' : 'pointer', fontSize: '12px', textAlign: 'center' as const, fontWeight: 700,
           }}
         >
           📎 ملف
@@ -4490,7 +4492,7 @@ const WhatsAppComposer = memo(({
         <button
           type="button"
           style={{
-            padding: '10px 14px', borderRadius: '10px', fontSize: '12px',
+            padding: '9px 10px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
             background: recording ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)',
             border: recording ? '1px solid rgba(239,68,68,0.45)' : '1px solid rgba(245,158,11,0.45)',
             color: recording ? '#f87171' : '#fbbf24',
@@ -4512,7 +4514,7 @@ const WhatsAppComposer = memo(({
               : undefined
           }
           style={{
-            ...S.sendBtn, marginTop: 0, padding: '12px 18px',
+            ...S.sendBtn, marginTop: 0, padding: '10px 10px', minHeight: '40px',
             background: editingMsgId ? 'rgba(59,130,246,0.85)' : undefined,
             opacity: sending || savingEdit ? 0.7 : 1,
             cursor: sending || savingEdit ? 'not-allowed' : 'pointer',
@@ -4520,12 +4522,12 @@ const WhatsAppComposer = memo(({
           disabled={sending || savingEdit}
           onClick={handleCommit}
         >
-          {editingMsgId ? (savingEdit ? '⏳' : '💾') : (sending ? '…' : (broadcastMode ? '📣' : selectedMetaTpl ? '📨' : '📤'))}
+          {editingMsgId ? (savingEdit ? '⏳ حفظ' : '💾 حفظ') : (sending ? '…' : (broadcastMode ? '📣 إرسال جماعي' : selectedMetaTpl ? '📨 إرسال' : '📤 إرسال'))}
         </button>
         <button
           type="button"
           style={{
-            padding: '12px 14px', borderRadius: '10px', fontWeight: 700, fontSize: '12px',
+            padding: '10px 10px', borderRadius: '10px', fontWeight: 700, fontSize: '12px', minHeight: '40px',
             border: '1px solid rgba(59,130,246,0.45)', background: 'rgba(59,130,246,0.2)',
             color: '#93c5fd',
             opacity: !!editingMsgId || sending || broadcastMode || !selectedMetaTpl ? 0.55 : 1,
@@ -4534,7 +4536,7 @@ const WhatsAppComposer = memo(({
           disabled={!!editingMsgId || sending || broadcastMode || !selectedMetaTpl}
           onClick={handleMetaCommit}
         >
-          📨
+          📨 إرسال القالب
         </button>
       </div>
     </div>
