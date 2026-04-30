@@ -65,7 +65,7 @@ const META_TEMPLATES_CONFIG: Record<string, { name: string; bodyParams: number; 
   eiat: { name: "eiat", bodyParams: 0, hasHeaderImage: true },
   eiat1: { name: "eiat1", bodyParams: 1, hasHeaderImage: true },
   confirmation: { name: "confirmation", bodyParams: 4, hasHeaderImage: false },
-  appointment_confirmation_message: { name: "appointment_confirmation_message", bodyParams: 4, hasHeaderImage: true },
+  appointment_confirmation_message: { name: "appointment_confirmation_message", bodyParams: 5, hasHeaderImage: true },
   open: { name: "open", bodyParams: 0, hasHeaderImage: false },
 };
 

@@ -34,6 +34,47 @@ function confirmationParams(row: {
   ];
 }
 
+function buildBodyParamsForTemplate(
+  templateName: string,
+  row: {
+    senderName: string;
+    confirmation: {patientName: string; appointmentText: string; service: string; confirmRef: string};
+  },
+  count: number,
+): string[] {
+  const base = confirmationParams(row);
+  const t = String(templateName || "").trim().toLowerCase();
+  const apptText = normalizeTemplateValue(row.confirmation.appointmentText, "");
+  const dayFromText = (apptText.match(/(السبت|الأحد|الاحد|الإثنين|الاثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة)/u)?.[1] || "").trim();
+  const timeFromText = (apptText.match(/(\d{1,2}:\d{2})/u)?.[1] || "").trim();
+  const dateFromText = (apptText.match(/(\d{4}-\d{1,2}-\d{1,2})/u)?.[1] || "").trim();
+
+  if (t === "appointment_confirmation_message") {
+    // Meta Arabic template currently uses positional placeholders as:
+    // {{1}} name, {{5}} day, {{2}} time, {{3}} date, {{4}} doctor
+    const ordered = [
+      normalizeTemplateValue(base[0], "عميلنا"),
+      normalizeTemplateValue(timeFromText || "06:00", "06:00"),
+      normalizeTemplateValue(dateFromText || new Date().toISOString().slice(0, 10), "2026-01-01"),
+      normalizeTemplateValue(base[2], "عيادات إيات"),
+      normalizeTemplateValue(dayFromText || "الاثنين", "الاثنين"),
+    ];
+    return Array.from({length: Math.max(0, count)}, (_, i) => normalizeTemplateValue(ordered[i] || "00", "00"));
+  }
+
+  const extendedPool: string[] = [
+    base[0],
+    base[1],
+    base[2],
+    base[3],
+    normalizeTemplateValue(row.senderName, "00"),
+    normalizeTemplateValue(row.confirmation.appointmentText, "00"),
+    normalizeTemplateValue(row.confirmation.service, "00"),
+    normalizeTemplateValue(row.confirmation.confirmRef, "00"),
+  ];
+  return Array.from({length: Math.max(0, count)}, (_, i) => normalizeTemplateValue(extendedPool[i] || "00", "00"));
+}
+
 type MetaTemplateSpec = {
   languageCode: string
   headerFormat: "NONE" | "IMAGE" | "TEXT" | "VIDEO" | "DOCUMENT"
@@ -43,8 +84,8 @@ type MetaTemplateSpec = {
 
 function expectedBodyParamCountForBatch(templateName: string, resolvedCount: number): number {
   const t = String(templateName || "").trim().toLowerCase();
-  // XLS parser extracts exactly 4 ordered fields for confirmation flow.
-  if (t === "confirmation" || t.includes("confirm")) return 4;
+  // Legacy `confirmation` template uses 4 body params in this project.
+  if (t === "confirmation") return 4;
   return Math.max(0, resolvedCount || 0);
 }
 
@@ -133,7 +174,7 @@ export async function POST(req: NextRequest) {
     const preview = rows.map((r) => ({
       rowIndex: r.rowIndex,
       phone: r.phoneRaw,
-      bodyParameterValues: confirmationParams(r).slice(0, bodyParamCount),
+      bodyParameterValues: buildBodyParamsForTemplate(templateName, r, bodyParamCount),
       parseWarnings: r.parseWarnings,
     }));
 
@@ -170,8 +211,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const baseParams = confirmationParams(r);
-      const bodyParams = Array.from({length: bodyParamCount}, (_, i) => baseParams[i] || "00");
+      const bodyParams = buildBodyParamsForTemplate(templateName, r, bodyParamCount);
       const metaTemplate: MetaTemplateSendPayload = {
         name: templateName,
         languageCode,
