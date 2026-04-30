@@ -3001,8 +3001,9 @@ export function WhatsAppTool() {
             ...S.card,
             display: 'flex',
             flexDirection: 'column' as const,
-            maxHeight: 'min(920px, calc(100dvh - 160px))',
-            minHeight: 0,
+            // Give chats near full-viewport height so message area is much larger.
+            maxHeight: 'calc(100dvh - 86px)',
+            minHeight: 'calc(100dvh - 86px)',
             overflow: 'hidden',
           }}
         >
@@ -3011,7 +3012,7 @@ export function WhatsAppTool() {
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              marginBottom: '16px',
+              marginBottom: '8px',
               flexWrap: 'wrap' as const,
             }}
           >
@@ -3072,12 +3073,12 @@ export function WhatsAppTool() {
 
           <details
             style={{
-              marginBottom: '14px',
+              marginBottom: '8px',
               fontSize: '12px',
               color: 'var(--wa-muted)',
               border: '1px solid var(--wa-border)',
               borderRadius: '10px',
-              padding: '10px 12px',
+              padding: '7px 10px',
               flexShrink: 0,
               background: 'var(--wa-surface-2)',
             }}
@@ -3130,7 +3131,7 @@ export function WhatsAppTool() {
           </details>
 
           <input
-            style={{...S.input, marginBottom: '16px', flexShrink: 0}}
+            style={{...S.input, marginBottom: '8px', flexShrink: 0}}
             placeholder="🔍 ابحث في المحادثات (اسم/رقم/نص)..."
             value={searchLog}
             onChange={(e) => setSearchLog(e.target.value)}
