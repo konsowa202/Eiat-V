@@ -33,6 +33,12 @@ const imageBuilder = createImageUrlBuilder({
 
 type MetaHeaderFormat = "NONE" | "IMAGE" | "TEXT" | "VIDEO" | "DOCUMENT";
 
+function allowsImageHeaderTemplate(graphTemplateName: string): boolean {
+  const g = (graphTemplateName || "").trim().toLowerCase();
+  // Current approved templates with image headers in this workspace.
+  return g === "eiat" || g === "eiat1";
+}
+
 export type MetaTemplateSendPayload = {
   name: string;
   languageCode: string;
@@ -172,7 +178,11 @@ function buildMetaTemplatePayload(num: string, meta: MetaTemplateSendPayload): {
   const headerTextVals = (meta.headerParameterValues || []).map((v) =>
     sanitizeWaTemplateParam(String(v ?? ""), 512),
   );
-  const headerFormat: MetaHeaderFormat = meta.headerFormat || "NONE";
+  let headerFormat: MetaHeaderFormat = meta.headerFormat || "NONE";
+  // Guard against accidental IMAGE header on templates that don't support images.
+  if (headerFormat === "IMAGE" && !allowsImageHeaderTemplate(graphName)) {
+    headerFormat = headerTextVals.length > 0 ? "TEXT" : "NONE";
+  }
 
   const payload: Record<string, unknown> = {
     messaging_product: "whatsapp",
