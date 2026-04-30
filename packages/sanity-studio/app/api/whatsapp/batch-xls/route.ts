@@ -107,7 +107,9 @@ export async function POST(req: NextRequest) {
       form.get("dryRun") === "true" ||
       req.nextUrl.searchParams.get("dryRun") === "1";
 
-    const templateName = String(form.get("templateName") || "confirmation").trim() || "confirmation";
+    const templateName =
+      String(form.get("templateName") || "appointment_confirmation_message").trim() ||
+      "appointment_confirmation_message";
     const preferredLanguageCode = String(form.get("languageCode") || "ar").trim() || "ar";
     const templateSpec = await resolveMetaTemplateSpec(templateName, preferredLanguageCode).catch(() => null);
     const languageCode = templateSpec?.languageCode || preferredLanguageCode;

@@ -1305,7 +1305,7 @@ export function WhatsAppTool() {
       const fd = new FormData()
       fd.append('file', f)
       fd.append('dryRun', '1')
-      fd.append('templateName', 'confirmation')
+      fd.append('templateName', 'appointment_confirmation_message')
       fd.append('languageCode', 'ar')
       const res = await fetch(waApiAbs('/api/whatsapp/batch-xls'), {method: 'POST', body: fd})
       const data = await parseApiResponse(res)
@@ -1329,15 +1329,15 @@ export function WhatsAppTool() {
     const n = xlsPreviewRows?.length
     const confirmMsg =
       n != null
-        ? `إرسال قالب Meta «confirmation» (عربي) إلى ${n} رقم؟`
-        : `إرسال قالب Meta «confirmation» من الملف الحالي؟`
+        ? `إرسال قالب Meta «appointment_confirmation_message» (عربي) إلى ${n} رقم؟`
+        : `إرسال قالب Meta «appointment_confirmation_message» من الملف الحالي؟`
     if (!window.confirm(confirmMsg)) return
     setXlsBusy(true)
     setAlert(null)
     try {
       const fd = new FormData()
       fd.append('file', f)
-      fd.append('templateName', 'confirmation')
+      fd.append('templateName', 'appointment_confirmation_message')
       fd.append('languageCode', 'ar')
       const res = await fetch(waApiAbs('/api/whatsapp/batch-xls'), {method: 'POST', body: fd})
       const data = await parseApiResponse(res)
