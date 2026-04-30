@@ -122,6 +122,22 @@ function inferMetaVarKindFromContext(raw: string): MetaVarKind {
   return 'generic'
 }
 
+function templateFallbackVarKinds(templateName: string, count: number): MetaVarKind[] {
+  const t = (templateName || '').toLowerCase()
+  if (t.includes('confirm') || t.includes('appointment') || t.includes('موعد') || t.includes('تأكيد')) {
+    const seq: MetaVarKind[] = ['name', 'date', 'service', 'reference', 'doctor', 'location']
+    return Array.from({length: count}, (_, i) => seq[i] || 'generic')
+  }
+  if (t.includes('doctor') || t.includes('طبيب')) {
+    const seq: MetaVarKind[] = ['name', 'doctor', 'date', 'service', 'reference']
+    return Array.from({length: count}, (_, i) => seq[i] || 'generic')
+  }
+  if (count === 2) return ['name', 'date']
+  if (count === 3) return ['name', 'date', 'service']
+  if (count === 4) return ['name', 'date', 'service', 'reference']
+  return Array.from({length: count}, () => 'generic')
+}
+
 function metaVarUiCopy(kind: MetaVarKind, idx: number): {label: string; placeholder: string} {
   if (kind === 'name') return {label: `اسم العميل (${idx})`, placeholder: 'مثال: محمد أحمد'}
   if (kind === 'date') return {label: `الموعد / التاريخ (${idx})`, placeholder: 'مثال: 2026-04-27 10:30'}
@@ -154,7 +170,9 @@ function buildMetaBodyParamHints(
   return Array.from({length: count}, (_, i) => {
     const idx = i + 1
     const ctx = contextByIndex.get(idx) || `${t.name} ${normalizedBody}`
-    const kind = inferMetaVarKindFromContext(ctx)
+    const inferred = inferMetaVarKindFromContext(ctx)
+    const fallbackKinds = templateFallbackVarKinds(t.name, count)
+    const kind = inferred === 'generic' ? fallbackKinds[i] || 'generic' : inferred
     const ui = metaVarUiCopy(kind, idx)
     let defaultValue = ''
     if (kind === 'name') defaultValue = defaults.patientName
@@ -1551,14 +1569,15 @@ export function WhatsAppTool() {
     if (t.headerFormat === 'TEXT' && hVarCount > 0) {
       for (let i = 0; i < hVarCount; i++) {
         if (!String(metaHeaderTextValues[i] ?? '').trim()) {
-          return showAlert('err', `⚠️ املأ متغير الهيدر ${i + 1} (مطلوب في قالب فيسبوك)`)
+          return showAlert('err', `⚠️ املأ ${`نص الهيدر ${i + 1}`} (مطلوب في قالب فيسبوك)`)
         }
       }
     }
 
     for (let i = 0; i < t.bodyVariableCount; i++) {
       if (!String(metaParamValues[i] ?? '').trim()) {
-        return showAlert('err', `⚠️ املأ قيمة المتغير ${i + 1} في القالب`)
+        const hint = selectedMetaParamHints[i]
+        return showAlert('err', `⚠️ املأ ${hint?.label || `القيمة ${i + 1}`} في القالب`)
       }
     }
 
@@ -4037,6 +4056,9 @@ export function WhatsAppTool() {
                                 flexDirection: 'column' as const,
                                 gap: '6px',
                                 padding: '8px 0 4px',
+                                maxHeight: '150px',
+                                overflowY: 'auto' as const,
+                                paddingLeft: '2px',
                               }}
                             >
                               <span style={{fontSize: '11px', color: 'var(--wa-muted)', fontWeight: 600}}>
@@ -4075,6 +4097,9 @@ export function WhatsAppTool() {
                                 flexDirection: 'column' as const,
                                 gap: '6px',
                                 padding: '8px 0 4px',
+                                maxHeight: '220px',
+                                overflowY: 'auto' as const,
+                                paddingLeft: '2px',
                               }}
                             >
                               <span style={{fontSize: '11px', color: 'var(--wa-muted)', fontWeight: 600}}>
