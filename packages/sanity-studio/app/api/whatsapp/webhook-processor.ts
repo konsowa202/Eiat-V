@@ -80,7 +80,8 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
           } else if (msg.type === "sticker") {
             messageBody = "[ملصق]";
             messageKind = "sticker";
-            waMediaId = (msg as any).sticker?.id;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            waMediaId = (msg as Record<string, {id?: string}>).sticker?.id;
           } else if (msg.type === "reaction") {
             const emoji = (msg.reaction?.emoji || "").trim();
             const target = (msg.reaction?.message_id || "").trim();
