@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       message?: string;
       templateUsed?: string;
       templateParams?: Record<string, string>;
-      metaTemplate?: any;
+      metaTemplate?: Record<string, unknown>;
       cursor?: number;
       batchSize?: number;
       tag?: string;
