@@ -174,20 +174,30 @@ export async function POST(req: NextRequest) {
     if (!upRes.ok) {
       const errMsg = upData?.error?.message || `HTTP ${upRes.status}`;
       const errCode = upData?.error?.code || "";
-      await withSanityWriteClient((client) =>
-        client.create({
-          _type: "whatsappConversation",
-          patientName,
-          phoneNumber: `+${num}`,
-          messageBody: caption || `[${kind}]`,
-          templateUsed,
-          status: "failed",
-          direction: "outgoing",
-          messageKind: kind,
-          sentAt: new Date().toISOString(),
-          errorMessage: `[${errCode}] ${errMsg}`,
-        }),
-      );
+      await withSanityWriteClient((client) => {
+        const phoneDigits = num;
+        const threadId = `whatsappThread.${phoneDigits}`;
+        const sentAtStr = new Date().toISOString();
+        return client.patch(threadId)
+          .setIfMissing({
+            _type: "whatsappThread",
+            phoneNumber: `+${num}`,
+            patientName,
+            messages: [],
+          })
+          .set({ patientName, lastMessageAt: sentAtStr })
+          .append("messages", [{
+            _key: Math.random().toString(36).substring(2, 15),
+            messageBody: caption || `[${kind}]`,
+            direction: "outgoing",
+            status: "failed",
+            messageKind: kind,
+            templateUsed,
+            sentAt: sentAtStr,
+            errorMessage: `[${errCode}] ${errMsg}`,
+          }])
+          .commit({ autoGenerateArrayKeys: true });
+      });
       return jsonCors(
         { success: false, error: `[${errCode}] ${errMsg}` },
         { status: 400 }
@@ -296,19 +306,26 @@ export async function POST(req: NextRequest) {
       const errMsg = waData?.error?.message || `HTTP ${waRes.status}`;
       const errCode = waData?.error?.code || "";
       await withSanityWriteClient((client) =>
-        client.create({
-          _type: "whatsappConversation",
-          patientName,
-          phoneNumber: `+${num}`,
-          messageBody: caption || `[${kind}]`,
-          templateUsed,
-          status: "failed",
-          direction: "outgoing",
-          messageKind: kind,
-          waMediaId: mediaId,
-          sentAt: new Date().toISOString(),
-          errorMessage: `[${errCode}] ${errMsg}`,
-        }),
+        client.patch(`whatsappThread.${num}`)
+          .setIfMissing({
+            _type: "whatsappThread",
+            phoneNumber: `+${num}`,
+            patientName,
+            messages: [],
+          })
+          .set({ patientName, lastMessageAt: new Date().toISOString() })
+          .append("messages", [{
+            _key: Math.random().toString(36).substring(2, 15),
+            messageBody: caption || `[${kind}]`,
+            direction: "outgoing",
+            status: "failed",
+            messageKind: kind,
+            waMediaId: mediaId,
+            templateUsed,
+            sentAt: new Date().toISOString(),
+            errorMessage: `[${errCode}] ${errMsg}`,
+          }])
+          .commit({ autoGenerateArrayKeys: true }),
       );
       return jsonCors(
         { success: false, error: `[${errCode}] ${errMsg}` },
@@ -319,19 +336,26 @@ export async function POST(req: NextRequest) {
     const wamid = waData?.messages?.[0]?.id || "";
 
     await withSanityWriteClient((client) =>
-      client.create({
-        _type: "whatsappConversation",
-        patientName,
-        phoneNumber: `+${num}`,
-        messageBody: caption || `[${kind}]`,
-        templateUsed,
-        status: "sent",
-        direction: "outgoing",
-        messageKind: kind,
-        waMediaId: mediaId,
-        wamid,
-        sentAt: new Date().toISOString(),
-      }),
+      client.patch(`whatsappThread.${num}`)
+        .setIfMissing({
+          _type: "whatsappThread",
+          phoneNumber: `+${num}`,
+          patientName,
+          messages: [],
+        })
+        .set({ patientName, lastMessageAt: new Date().toISOString() })
+        .append("messages", [{
+          _key: Math.random().toString(36).substring(2, 15),
+          messageBody: caption || `[${kind}]`,
+          direction: "outgoing",
+          status: "sent",
+          messageKind: kind,
+          waMediaId: mediaId,
+          templateUsed,
+          wamid,
+          sentAt: new Date().toISOString(),
+        }])
+        .commit({ autoGenerateArrayKeys: true }),
     );
 
     return jsonCors({

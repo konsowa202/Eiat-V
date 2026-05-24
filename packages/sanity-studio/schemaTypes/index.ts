@@ -6,8 +6,8 @@ import testimonial from './testimonial'
 import device from './device'
 import offer from './offer'
 import whatsappTemplate from './whatsapp-template'
-import whatsappConversation from './whatsapp-conversation'
 import whatsappContact from './whatsapp-contact'
+import whatsappThread from './whatsapp-thread'
 import beforeAfter from './before-after'
 
 export const schemaTypes = [
@@ -19,7 +19,7 @@ export const schemaTypes = [
   device,
   offer,
   whatsappTemplate,
-  whatsappConversation,
   whatsappContact,
+  whatsappThread,
   beforeAfter,
 ]

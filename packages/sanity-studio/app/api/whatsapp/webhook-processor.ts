@@ -1,9 +1,5 @@
 import { withSanityWriteClient } from "./sanity-write-client";
-
-function safeConversationIdFromWamid(wamid: string): string {
-  const safe = (wamid || "").replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `wa_conv_${safe || Date.now()}`;
-}
+import { randomUUID } from "crypto";
 
 export type ProcessWebhookResult = {
   incomingUpserts: number;
@@ -56,6 +52,7 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
           const contact = contacts?.find((c) => c.wa_id === msg.from);
           const senderName = contact?.profile?.name || "غير معروف";
           const phoneNumber = msg.from ? `+${msg.from}` : "";
+          const phoneDigits = phoneNumber.replace(/\D/g, "");
 
           let messageBody = "";
           let messageKind = "text";
@@ -108,29 +105,40 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
           }
 
           try {
-            const docId = safeConversationIdFromWamid(String(msg.id || ""));
+            const threadId = `whatsappThread.${phoneDigits}`;
+            const sentAt = (() => {
+              const ts = parseInt(String(msg.timestamp), 10);
+              return new Date(Number.isFinite(ts) ? ts * 1000 : Date.now()).toISOString();
+            })();
+
             await withSanityWriteClient((client) =>
-              client.createOrReplace({
-                _id: docId,
-                _type: "whatsappConversation",
-                patientName: senderName,
-                phoneNumber,
-                messageBody,
-                templateUsed: "رسالة واردة",
-                status: "sent",
-                direction: "incoming",
-                messageKind,
-                ...(waMediaId ? { waMediaId } : {}),
-                wamid: msg.id,
-                sentAt: (() => {
-                  const ts = parseInt(String(msg.timestamp), 10);
-                  return new Date(Number.isFinite(ts) ? ts * 1000 : Date.now()).toISOString();
-                })(),
-              }),
+              client
+                .patch(threadId)
+                .setIfMissing({
+                  _type: "whatsappThread",
+                  phoneNumber,
+                  patientName: senderName,
+                  messages: [],
+                })
+                .set({ patientName: senderName, lastMessageAt: sentAt })
+                .append("messages", [
+                  {
+                    _key: randomUUID(),
+                    messageBody,
+                    direction: "incoming",
+                    status: "sent",
+                    messageKind,
+                    ...(waMediaId ? { waMediaId } : {}),
+                    templateUsed: "رسالة واردة",
+                    wamid: msg.id,
+                    sentAt,
+                  },
+                ])
+                .commit({ autoGenerateArrayKeys: true })
             );
             incomingUpserts += 1;
           } catch (createErr) {
-            console.error("[WhatsApp Webhook] sanity.create failed for incoming message:", createErr);
+            console.error("[WhatsApp Webhook] sanity.patch failed for incoming message:", createErr);
           }
         }
       }
@@ -153,23 +161,25 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
           if (!newStatus) continue;
 
           await withSanityWriteClient(async (client) => {
-            const existing = await client.fetch<{ _id: string }[]>(
-              `*[_type == "whatsappConversation" && wamid == $wamid][0..0]{ _id }`,
-              { wamid: st.id },
+            const existingThread = await client.fetch<{ _id: string, messages: Record<string, unknown>[] }>(
+              `*[_type == "whatsappThread" && $wamid in messages[].wamid][0]{ _id, messages }`,
+              { wamid: st.id }
             );
-            if (existing?.length > 0) {
-              await client
-                .patch(existing[0]._id)
-                .set({
-                  status: newStatus,
-                  ...(st.status === "failed"
-                    ? {
-                        errorMessage: st.errors?.[0]?.title || st.errors?.[0]?.message || "فشل الإرسال",
-                      }
-                    : {}),
-                })
-                .commit();
-              statusPatches += 1;
+
+            if (existingThread && existingThread.messages) {
+              const msgIndex = existingThread.messages.findIndex((m) => m.wamid === st.id);
+              if (msgIndex !== -1) {
+                const key = existingThread.messages[msgIndex]._key;
+                const patchObj: Record<string, unknown> = {
+                  [`messages[_key == "${key}"].status`]: newStatus,
+                };
+                if (st.status === "failed") {
+                  patchObj[`messages[_key == "${key}"].errorMessage`] = 
+                    st.errors?.[0]?.title || st.errors?.[0]?.message || "فشل الإرسال";
+                }
+                await client.patch(existingThread._id).set(patchObj).commit();
+                statusPatches += 1;
+              }
             }
           });
         }

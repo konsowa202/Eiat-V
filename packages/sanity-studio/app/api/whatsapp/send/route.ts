@@ -520,23 +520,38 @@ export async function POST(req: NextRequest) {
         "لم يُحفظ السجل في Sanity: SANITY_API_WRITE_TOKEN غير مضبوط على الخادم (مثلاً Vercel). أضف توكن كتابة (Editor) حتى تظهر الرسائل في الشات.";
     } else {
       try {
-        await sanity.create({
-          _type: "whatsappConversation",
-          phoneNumber: phoneE164,
-          patientName: resolvedPatientName,
-          messageBody: outgoingBody,
-          status: graphOk ? "sent" : "failed",
-          templateUsed: metaTemplate?.name?.trim()
-            ? graphTemplateName
-            : config
-              ? config.name
-              : templateUsed || "رسالة مخصصة",
-          direction: "outgoing",
-          sentAt: new Date().toISOString(),
-          ...(graphOk && wamid ? {wamid} : {}),
-          ...(!graphOk && graphErrLine ? {errorMessage: graphErrLine} : {}),
-          notes: JSON.stringify({ version: "3.3", payload, waData, graphOk, graphErrLine }, null, 2),
-        });
+        const phoneDigits = phoneE164.replace(/\D/g, "");
+        const threadId = `whatsappThread.${phoneDigits}`;
+        const sentAtStr = new Date().toISOString();
+        
+        await sanity
+          .patch(threadId)
+          .setIfMissing({
+            _type: "whatsappThread",
+            phoneNumber: phoneE164,
+            patientName: resolvedPatientName,
+            messages: [],
+          })
+          .set({ patientName: resolvedPatientName, lastMessageAt: sentAtStr })
+          .append("messages", [
+            {
+              _key: Math.random().toString(36).substring(2, 15),
+              messageBody: outgoingBody,
+              status: graphOk ? "sent" : "failed",
+              templateUsed: metaTemplate?.name?.trim()
+                ? graphTemplateName
+                : config
+                  ? config.name
+                  : templateUsed || "رسالة مخصصة",
+              direction: "outgoing",
+              messageKind: "text",
+              sentAt: sentAtStr,
+              ...(graphOk && wamid ? {wamid} : {}),
+              ...(!graphOk && graphErrLine ? {errorMessage: graphErrLine} : {}),
+              notes: JSON.stringify({ version: "3.3", payload, waData, graphOk, graphErrLine }),
+            }
+          ])
+          .commit({ autoGenerateArrayKeys: true });
       } catch (persistErr: unknown) {
         const raw = persistErr instanceof Error ? persistErr.message : String(persistErr);
         logPersistError = raw.includes("403") || raw.toLowerCase().includes("forbidden")

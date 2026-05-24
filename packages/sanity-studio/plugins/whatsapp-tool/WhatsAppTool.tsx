@@ -289,6 +289,7 @@ function conversationTemplateUsedForDisplay(c: ConversationDoc): string | undefi
 }
 
 interface ConversationDoc {
+  _key?: string
   _id: string
   patientName?: string
   phoneNumber: string
@@ -1002,18 +1003,35 @@ export function WhatsAppTool() {
     const silent = opts?.silent === true
     if (!silent) setLoadingLog(true)
     client
-      .fetch<ConversationDoc[]>(
-        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..2999] {
-        _id, patientName, phoneNumber, messageBody, templateUsed,
-        status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
+      .fetch<any[]>(
+        `*[_type == "whatsappThread"] | order(lastMessageAt desc)[0..99] {
+        _id, patientName, phoneNumber, lastMessageAt, messages
       }`,
       )
-      .then((d) => setConversations(prev => {
-        if (!prev || prev.length === 0) return d || []
-        const newIds = new Set((d || []).map(x => x._id))
-        const oldOnesToKeep = prev.filter(x => !newIds.has(x._id))
-        return [...(d || []), ...oldOnesToKeep]
-      }))
+      .then((d) => {
+        const flat: ConversationDoc[] = []
+        for (const thread of d || []) {
+          for (const msg of thread.messages || []) {
+            flat.push({
+              _id: thread._id,
+              _key: msg._key,
+              patientName: thread.patientName,
+              phoneNumber: thread.phoneNumber,
+              messageBody: msg.messageBody,
+              templateUsed: msg.templateUsed,
+              status: msg.status,
+              direction: msg.direction,
+              wamid: msg.wamid,
+              sentAt: msg.sentAt,
+              errorMessage: msg.errorMessage,
+              messageKind: msg.messageKind,
+              waMediaId: msg.waMediaId
+            })
+          }
+        }
+        flat.sort((a, b) => new Date(b.sentAt || '').getTime() - new Date(a.sentAt || '').getTime())
+        setConversations(flat)
+      })
       .catch((err: unknown) => {
         if (opts?.onError === 'alert') {
           const msg = err instanceof Error ? err.message : 'تعذر تحديث المحادثات'
@@ -1528,11 +1546,11 @@ export function WhatsAppTool() {
     }
   }
 
-  /** Deletes every `whatsappContact` document (any status). Does not touch `whatsappConversation`. */
+  /** Deletes every `whatsappContact` document (any status). Does not touch `whatsappThread`. */
   const handleDeleteAllSavedContacts = async () => {
     if (
       !window.confirm(
-        'سيتم حذف جميع مستندات «جهات اتصال واتساب» (whatsappContact) من Sanity نهائيًا.\n\nسجل المحادثات (آخر المحادثات / whatsappConversation) لن يُمس.\n\nمتابعة؟',
+        'سيتم حذف جميع مستندات «جهات اتصال واتساب» (whatsappContact) من Sanity نهائيًا.\n\nسجل المحادثات (آخر المحادثات / whatsappThread) لن يُمس.\n\nمتابعة؟',
       )
     ) {
       return
@@ -2315,10 +2333,14 @@ export function WhatsAppTool() {
     }
   }
 
-  const handleDeleteMsg = async (msgId: string) => {
+  const handleDeleteMsg = async (msgId: string, msgKey?: string) => {
     if (!window.confirm('هل أنت متأكد من حذف هذه الرسالة من السجل؟')) return
     try {
-      await client.delete(msgId)
+      if (msgKey) {
+        await client.patch(msgId).unset([`messages[_key == "${msgKey}"]`]).commit()
+      } else {
+        await client.delete(msgId)
+      }
       showAlert('ok', '✅ تم حذف الرسالة')
       void fetchConversations({ silent: true })
     } catch (err: unknown) {
@@ -2447,21 +2469,40 @@ export function WhatsAppTool() {
         return
       }
 
-      const olderMsgs = await client.fetch<ConversationDoc[]>(
-        `*[_type == "whatsappConversation" && phoneNumber match "*${digits}*" && sentAt < $oldestAt] | order(sentAt desc)[0...100] {
-          _id, patientName, phoneNumber, messageBody, templateUsed,
-          status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
-        }`,
-        { oldestAt: oldestMsg.sentAt }
+      const olderThreads = await client.fetch<any[]>(
+        `*[_type == "whatsappThread" && phoneNumber match "*${digits}*"] | order(lastMessageAt desc)[0...100] {
+          _id, patientName, phoneNumber, lastMessageAt, messages
+        }`
       )
 
-      if (olderMsgs && olderMsgs.length > 0) {
+      const olderMsgs: any[] = []
+      for (const thread of olderThreads || []) {
+        for (const msg of thread.messages || []) {
+          olderMsgs.push({
+            _id: thread._id,
+            _key: msg._key,
+            patientName: thread.patientName,
+            phoneNumber: thread.phoneNumber,
+            messageBody: msg.messageBody,
+            templateUsed: msg.templateUsed,
+            status: msg.status,
+            direction: msg.direction,
+            wamid: msg.wamid,
+            sentAt: msg.sentAt,
+            errorMessage: msg.errorMessage,
+            messageKind: msg.messageKind,
+            waMediaId: msg.waMediaId
+          })
+        }
+      }
+
+      if (olderMsgs.length > 0) {
         setConversations(prev => {
-          const existingIds = new Set(prev.map(c => c._id))
-          const newOnes = olderMsgs.filter(c => !existingIds.has(c._id))
+          const existingKeys = new Set(prev.map(c => c._key))
+          const newOnes = olderMsgs.filter(c => !existingKeys.has(c._key))
           return [...prev, ...newOnes]
         })
-        showAlert('ok', `✅ تم تحميل ${olderMsgs.length} رسالة أقدم`)
+        showAlert('ok', `✅ تم تحميل رسائل أقدم`)
       } else {
         showAlert('ok', 'لا توجد رسائل أقدم من ذلك')
       }
@@ -2481,23 +2522,39 @@ export function WhatsAppTool() {
       const digits = q.replace(/\D/g, '')
       let query = ''
       if (digits.length >= 4) {
-        query = `*[_type == "whatsappConversation" && phoneNumber match "*${digits}*"] | order(sentAt desc)[0...50]`
+        query = `*[_type == "whatsappThread" && phoneNumber match "*${digits}*"] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
       } else {
-        query = `*[_type == "whatsappConversation" && patientName match "*${q}*"] | order(sentAt desc)[0...50]`
+        query = `*[_type == "whatsappThread" && patientName match "*${q}*"] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
       }
-      const results = await client.fetch<ConversationDoc[]>(
-        query + ` {
-          _id, patientName, phoneNumber, messageBody, templateUsed,
-          status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
-        }`
-      )
-      if (results && results.length > 0) {
+      const searchThreads = await client.fetch<any[]>(query)
+      const results: any[] = []
+      for (const thread of searchThreads || []) {
+        for (const msg of thread.messages || []) {
+          results.push({
+            _id: thread._id,
+            _key: msg._key,
+            patientName: thread.patientName,
+            phoneNumber: thread.phoneNumber,
+            messageBody: msg.messageBody,
+            templateUsed: msg.templateUsed,
+            status: msg.status,
+            direction: msg.direction,
+            wamid: msg.wamid,
+            sentAt: msg.sentAt,
+            errorMessage: msg.errorMessage,
+            messageKind: msg.messageKind,
+            waMediaId: msg.waMediaId
+          })
+        }
+      }
+
+      if (results.length > 0) {
         setConversations(prev => {
-          const existingIds = new Set(prev.map(c => c._id))
-          const newOnes = results.filter(c => !existingIds.has(c._id))
+          const existingKeys = new Set(prev.map(c => c._key))
+          const newOnes = results.filter(c => !existingKeys.has(c._key))
           return [...prev, ...newOnes]
         })
-        showAlert('ok', `✅ تم إيجاد ${results.length} رسالة من الأرشيف`)
+        showAlert('ok', `✅ تم إيجاد الأرشيف`)
       } else {
         showAlert('ok', 'لا توجد نتائج في الأرشيف (السيرفر)')
       }
@@ -3309,7 +3366,7 @@ export function WhatsAppTool() {
           >
             <p style={{fontSize: '12px', color: 'var(--wa-muted)', lineHeight: 1.55, margin: '0 0 10px'}}>
               <strong>حذف جماعي:</strong> يحذف كل مستندات نوع <strong>جهات اتصال واتساب</strong> من Sanity (يقلّل عدد
-              المستندات في الحصة). <strong>آخر المحادثات</strong> (نوع <code dir="ltr">whatsappConversation</code>) لا
+              المستندات في الحصة). <strong>آخر المحادثات</strong> (نوع <code dir="ltr">whatsappThread</code>) لا
               تتأثر.
             </p>
             <button
