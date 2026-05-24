@@ -99,6 +99,9 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
               msg.interactive?.list_reply?.title ||
               "[تفاعلي]";
             messageKind = "unknown";
+          } else if (msg.type === "unsupported") {
+            messageBody = "[رسالة غير مدعومة أو إشعار نظام]";
+            messageKind = "unknown";
           } else {
             messageBody = `[${msg.type || "unknown"}]`;
             messageKind = "unknown";

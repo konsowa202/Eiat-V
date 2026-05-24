@@ -675,6 +675,35 @@ const fillTemplate = (tpl: WaTemplate, vars: TemplateVars): string => {
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
+function playNotificationSound() {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') void ctx.resume();
+    
+    const playTone = (freq: number, startTime: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.4);
+    };
+
+    playTone(1046.50, ctx.currentTime);       // C6
+    playTone(1318.51, ctx.currentTime + 0.1); // E6
+  } catch (e) {
+    // Ignore errors
+  }
+}
+
 export function WhatsAppTool() {
   const client = useClient({apiVersion: '2024-01-01'})
 
@@ -731,6 +760,7 @@ export function WhatsAppTool() {
   const [searchLog, setSearchLog] = useState('')
   const [contactsSearch, setContactsSearch] = useState('')
   const [logFilter, setLogFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false)
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
@@ -784,6 +814,7 @@ export function WhatsAppTool() {
   const sessionUnreadBaselineRef = useRef<Map<string, number>>(new Map())
   const lastFocusFetchAtRef = useRef(0)
   const chatScrollRef = useRef<HTMLDivElement>(null)
+  const chatBottomRef = useRef<HTMLDivElement>(null)
   const isTypingRef = useRef(false)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const suppressNextChatClickRef = useRef(false)
@@ -792,6 +823,7 @@ export function WhatsAppTool() {
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioPartsRef = useRef<Blob[]>([])
   const audioMimeTypeRef = useRef('audio/ogg')
+  const lastIncomingMsgAtRef = useRef<number>(0)
 
   const alertTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -968,7 +1000,7 @@ export function WhatsAppTool() {
     if (!silent) setLoadingLog(true)
     client
       .fetch<ConversationDoc[]>(
-        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..499] {
+        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..4999] {
         _id, patientName, phoneNumber, messageBody, templateUsed,
         status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
       }`,
@@ -1069,6 +1101,22 @@ export function WhatsAppTool() {
   useEffect(() => {
     fetchConversations()
   }, [fetchConversations])
+
+  // Play notification sound on new incoming message
+  useEffect(() => {
+    const incoming = conversations.filter(c => c.direction === 'incoming');
+    if (incoming.length === 0) return;
+    const newestIncoming = Math.max(...incoming.map(c => new Date(c.sentAt).getTime()));
+    
+    if (lastIncomingMsgAtRef.current === 0) {
+      // First load, just initialize the ref
+      lastIncomingMsgAtRef.current = newestIncoming;
+    } else if (newestIncoming > lastIncomingMsgAtRef.current) {
+      // New incoming message arrived!
+      lastIncomingMsgAtRef.current = newestIncoming;
+      playNotificationSound();
+    }
+  }, [conversations])
 
   // Auto-refresh ~every 15s; skip while typing, recording, or sending media/text (avoids breaking uploads).
   useEffect(() => {
@@ -1973,10 +2021,13 @@ export function WhatsAppTool() {
     [lastReadMsForThread],
   )
 
-  const threadRowsForList = useMemo(
-    () => filteredThreads.map((th) => ({th, unread: countIncomingUnread(th)})),
-    [filteredThreads, countIncomingUnread, readEpoch],
-  )
+  const threadRowsForList = useMemo(() => {
+    let list = filteredThreads.map((th) => ({th, unread: countIncomingUnread(th)}))
+    if (showUnreadOnly) {
+      list = list.filter((x) => x.unread > 0)
+    }
+    return list
+  }, [filteredThreads, countIncomingUnread, readEpoch, showUnreadOnly])
 
   // While a thread is open, treat new incoming as read (WhatsApp-style).
   useEffect(() => {
@@ -2091,13 +2142,26 @@ export function WhatsAppTool() {
 
   useEffect(() => {
     if (tab !== 'chats' || logTableMode) return
-    const el = chatScrollRef.current
-    if (!el) return
-    // Use a small timeout to ensure layout has settled on mount/refresh
-    const timer = setTimeout(() => {
-      el.scrollTop = el.scrollHeight
-    }, 60)
-    return () => clearTimeout(timer)
+    
+    // Multiple scroll attempts to handle large DOM renders and image loading delays
+    const doScroll = () => {
+      const el = chatScrollRef.current
+      if (el) el.scrollTop = el.scrollHeight
+      chatBottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    }
+    
+    doScroll()
+    const t1 = setTimeout(doScroll, 10)
+    const t2 = setTimeout(doScroll, 100)
+    const t3 = setTimeout(doScroll, 350)
+    const t4 = setTimeout(doScroll, 800)
+    
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+      clearTimeout(t4)
+    }
   }, [tab, activeThread?.messages.length, selectedThreadKey, logTableMode])
 
   return (
@@ -3470,9 +3534,27 @@ export function WhatsAppTool() {
                       color: 'var(--wa-muted)',
                       background: 'var(--wa-surface-2)',
                       fontWeight: 700,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
                     }}
                   >
-                    💬 آخر المحادثات ({threadRowsForList.length})
+                    <span>💬 آخر المحادثات ({threadRowsForList.length})</span>
+                    <button
+                      onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+                      style={{
+                        background: showUnreadOnly ? 'var(--wa-brand)' : 'transparent',
+                        color: showUnreadOnly ? '#fff' : 'var(--wa-text)',
+                        border: '1px solid var(--wa-border)',
+                        borderRadius: '6px',
+                        padding: '2px 6px',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        fontFamily: "'Segoe UI', Tajawal, sans-serif"
+                      }}
+                    >
+                      {showUnreadOnly ? 'عرض الكل' : 'غير مقروءة'}
+                    </button>
                   </div>
                   <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0}}>
                     {threadRowsForList.map(({th, unread}) => (
@@ -3916,6 +3998,7 @@ export function WhatsAppTool() {
                           </div>
                         )
                       })}
+                      <div ref={chatBottomRef} style={{ height: 1, flexShrink: 0 }} />
                     </div>
                     <div
                       style={{
