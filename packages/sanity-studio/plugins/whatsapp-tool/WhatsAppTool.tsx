@@ -4546,6 +4546,22 @@ export function WhatsAppTool() {
                                     }}
                                   />
                                 )}
+                                {c.waMediaId && kind === 'sticker' && (
+                                  <img
+                                    src={src}
+                                    alt="ملصق"
+                                    style={{
+                                      maxWidth: '160px',
+                                      maxHeight: '160px',
+                                      borderRadius: '6px',
+                                      marginBottom: '4px',
+                                      display: 'block',
+                                    }}
+                                  />
+                                )}
+                                {!c.waMediaId && kind === 'sticker' && (
+                                  <div style={{fontSize: '32px', textAlign: 'center', padding: '8px'}}>🏷️ ملصق</div>
+                                )}
                                 {c.waMediaId && kind === 'video' && (
                                   <video
                                     src={src}

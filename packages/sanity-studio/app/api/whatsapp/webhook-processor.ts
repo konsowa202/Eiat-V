@@ -77,6 +77,10 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
             messageBody = "[فيديو]";
             messageKind = "video";
             waMediaId = msg.video?.id;
+          } else if (msg.type === "sticker") {
+            messageBody = "[ملصق]";
+            messageKind = "sticker";
+            waMediaId = msg.sticker?.id;
           } else if (msg.type === "reaction") {
             const emoji = (msg.reaction?.emoji || "").trim();
             const target = (msg.reaction?.message_id || "").trim();
