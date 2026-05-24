@@ -358,12 +358,7 @@ function commonSuffixLen(a: string, b: string): number {
 
 function samePersonDigits(a: string, b: string): boolean {
   if (!a || !b) return false
-  if (a === b) return true
-  const suffix = commonSuffixLen(a, b)
-  // Country-agnostic: at least 8 trailing digits must match,
-  // and length difference can be larger due to country/trunk prefixes.
-  if (suffix >= 8 && Math.abs(a.length - b.length) <= 6) return true
-  return false
+  return a === b
 }
 
 function resolveThreadKey(phone: string | undefined, existingKeys: string[]): string {
