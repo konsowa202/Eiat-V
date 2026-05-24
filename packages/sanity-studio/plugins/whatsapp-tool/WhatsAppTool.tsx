@@ -762,6 +762,10 @@ export function WhatsAppTool() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [renderedCount, setRenderedCount] = useState(1000)
   const [searchingBackend, setSearchingBackend] = useState(false)
+  const [searchResults, setSearchResults] = useState<{threadId: string, threadName: string, threadPhone: string, msgKey: string, msgBody: string, sentAt: string, direction: string}[]>([])
+  const [showSearchResults, setShowSearchResults] = useState(false)
+  const [scrollToMsgKey, setScrollToMsgKey] = useState<string | null>(null)
+  const scrollToMsgKeyRef = useRef<string | null>(null)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
   const [creatingNewChat, setCreatingNewChat] = useState(false)
@@ -1978,6 +1982,9 @@ export function WhatsAppTool() {
   )
 
   const filteredThreads = useMemo(() => {
+    // When search is active and has results, don't filter threads client-side
+    // The search results panel handles navigation
+    if (showSearchResults && searchResults.length > 0) return threads
     const q = searchLog.trim()
     if (!q) return threads
     return threads.filter(
@@ -1991,7 +1998,7 @@ export function WhatsAppTool() {
             m.patientName?.includes(q),
         ),
     )
-  }, [threads, searchLog])
+  }, [threads, searchLog, showSearchResults, searchResults])
 
   const activeThread = useMemo(
     () => threads.find((t) => t.key === selectedThreadKey) || null,
@@ -2481,78 +2488,142 @@ export function WhatsAppTool() {
   
   useEffect(() => {
     if (tab !== 'chats' || logTableMode) return
+    // If we have a pending scroll-to-message, do that instead of scrolling to bottom
+    if (scrollToMsgKeyRef.current) {
+      const targetKey = scrollToMsgKeyRef.current
+      scrollToMsgKeyRef.current = null
+      const tryScroll = () => {
+        const el = chatScrollRef.current
+        if (!el) return false
+        const msgEl = el.querySelector(`[data-msg-key="${targetKey}"]`) as HTMLElement | null
+        if (msgEl) {
+          msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          // Highlight animation
+          msgEl.style.transition = 'background 0.3s'
+          msgEl.style.background = 'rgba(37,211,102,0.25)'
+          setTimeout(() => { msgEl.style.background = '' }, 2000)
+          return true
+        }
+        return false
+      }
+      if (!tryScroll()) {
+        // May need to wait for render
+        setTimeout(() => { if (!tryScroll()) setTimeout(tryScroll, 300) }, 100)
+      }
+      return
+    }
     const doScroll = () => {
       const el = chatScrollRef.current
       if (el) {
-        if (searchLog.trim() && effectiveActiveThread) {
-          const q = searchLog.trim().toLowerCase()
-          const matchedMsg = effectiveActiveThread.messages.find(m => (m.messageBody || '').toLowerCase().includes(q))
-          if (matchedMsg && matchedMsg._key) {
-            const msgEl = document.getElementById(`msg-${matchedMsg._key}`)
-            if (msgEl) {
-              msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              return
-            }
-          }
-        }
         el.scrollTop = el.scrollHeight
       }
     }
     doScroll()
     const t = setTimeout(doScroll, 150)
     return () => clearTimeout(t)
-  }, [selectedThreadKey, newestMsgId, tab, logTableMode, searchLog, effectiveActiveThread])
+  }, [selectedThreadKey, newestMsgId, tab, logTableMode, scrollToMsgKey])
 
 
   const handleSearchBackend = async () => {
     const q = searchLog.trim()
     if (!q || searchingBackend) return
     setSearchingBackend(true)
+    setSearchResults([])
+    setShowSearchResults(false)
     try {
-      const digits = q.replace(/\D/g, '')
-      let query = ''
-      if (digits.length >= 4) {
-        query = `*[_type == "whatsappThread" && phoneNumber match "*${digits}*"] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
-      } else {
-        query = `*[_type == "whatsappThread" && (patientName match "*${q}*" || messages[].messageBody match "*${q}*")] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
-      }
-      const searchThreads = await client.fetch<any[]>(query)
-      const results: any[] = []
-      for (const thread of searchThreads || []) {
+      // Search by phone digits, patient name, or message body — all in one query
+      const allThreads = await client.fetch<any[]>(
+        `*[_type == "whatsappThread"] | order(lastMessageAt desc) {
+          _id, patientName, phoneNumber, lastMessageAt, messages
+        }`
+      )
+
+      const qLower = q.toLowerCase()
+      const qDigits = q.replace(/\D/g, '')
+      const results: typeof searchResults = []
+
+      for (const thread of allThreads || []) {
+        const threadDigits = (thread.phoneNumber || '').replace(/\D/g, '')
+        const nameMatch = (thread.patientName || '').toLowerCase().includes(qLower)
+        const phoneMatch = qDigits.length >= 3 && threadDigits.includes(qDigits)
+
         for (const msg of thread.messages || []) {
-          results.push({
-            _id: thread._id,
-            _key: msg._key,
-            patientName: thread.patientName,
-            phoneNumber: thread.phoneNumber,
-            messageBody: msg.messageBody,
-            templateUsed: msg.templateUsed,
-            status: msg.status,
-            direction: msg.direction,
-            wamid: msg.wamid,
-            sentAt: msg.sentAt,
-            errorMessage: msg.errorMessage,
-            messageKind: msg.messageKind,
-            waMediaId: msg.waMediaId
-          })
+          const bodyMatch = (msg.messageBody || '').toLowerCase().includes(qLower)
+          if (bodyMatch || nameMatch || phoneMatch) {
+            results.push({
+              threadId: thread._id,
+              threadName: thread.patientName || 'بدون اسم',
+              threadPhone: thread.phoneNumber || '',
+              msgKey: msg._key,
+              msgBody: msg.messageBody || '',
+              sentAt: msg.sentAt || '',
+              direction: msg.direction || 'outgoing'
+            })
+          }
         }
       }
 
-      if (results.length > 0) {
+      // Also merge these threads into conversations so they appear in the sidebar
+      for (const thread of allThreads || []) {
+        const hasResult = results.some(r => r.threadId === thread._id)
+        if (!hasResult) continue
         setConversations(prev => {
-          const existingKeys = new Set(prev.map(c => c._key))
-          const newOnes = results.filter(c => !existingKeys.has(c._key))
-          return [...prev, ...newOnes]
+          const flat = [...prev]
+          for (const m of thread.messages || []) {
+            if (!flat.find(x => x._key === m._key)) {
+              flat.push({
+                _id: thread._id,
+                _key: m._key,
+                patientName: thread.patientName,
+                phoneNumber: thread.phoneNumber,
+                ...m
+              })
+            }
+          }
+          flat.sort((a, b) => new Date(b.sentAt || '').getTime() - new Date(a.sentAt || '').getTime())
+          return flat
         })
-        showAlert('ok', `✅ تم إيجاد الأرشيف`)
+      }
+
+      if (results.length > 0) {
+        setSearchResults(results)
+        setShowSearchResults(true)
+        showAlert('ok', `✅ تم إيجاد ${results.length} نتيجة في ${new Set(results.map(r => r.threadId)).size} محادثة`)
       } else {
-        showAlert('ok', 'لا توجد نتائج في الأرشيف (السيرفر)')
+        showAlert('ok', 'لا توجد نتائج في قاعدة البيانات')
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'حدث خطأ'
       showAlert('err', `❌ فشل البحث في السيرفر: ${msg}`)
     } finally {
       setSearchingBackend(false)
+    }
+  }
+
+  const handleSearchResultClick = (threadId: string, msgKey: string) => {
+    // Find thread key from threadId
+    const threadDigits = threadId.replace('whatsappThread.', '')
+    const targetThread = threads.find(t => t.key === threadDigits)
+    if (targetThread) {
+      // Ensure enough messages are rendered to see the target
+      const msgIndex = targetThread.messages.findIndex(m => m._key === msgKey)
+      if (msgIndex >= 0) {
+        const fromEnd = targetThread.messages.length - msgIndex
+        if (fromEnd > renderedCount) {
+          setRenderedCount(Math.max(fromEnd + 50, 1000))
+        }
+      }
+      scrollToMsgKeyRef.current = msgKey
+      setScrollToMsgKey(msgKey) // trigger effect
+      startTransition(() => {
+        setSelectedThreadKey(targetThread.key)
+        setCreatingNewChat(false)
+        setChatQuickPhone('')
+        setSelectedChatTpl(null)
+      })
+      setShowSearchResults(false)
+    } else {
+      showAlert('err', 'لم يتم العثور على المحادثة في القائمة المحملة')
     }
   }
 
@@ -3607,12 +3678,142 @@ export function WhatsAppTool() {
             </button>
           </details>
 
-          <input
-            style={{...S.input, marginBottom: '8px', flexShrink: 0}}
-            placeholder="🔍 ابحث في المحادثات (اسم/رقم/نص)..."
-            value={searchLog}
-            onChange={(e) => setSearchLog(e.target.value)}
-          />
+          <div style={{position: 'relative', flexShrink: 0, marginBottom: '8px'}}>
+            <div style={{display: 'flex', gap: '4px', alignItems: 'center'}}>
+              <input
+                style={{...S.input, marginBottom: 0, flex: 1}}
+                placeholder="🔍 ابحث في المحادثات (اسم/رقم/نص)..."
+                value={searchLog}
+                onChange={(e) => {
+                  setSearchLog(e.target.value)
+                  if (!e.target.value.trim()) {
+                    setShowSearchResults(false)
+                    setSearchResults([])
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleSearchBackend()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSearchBackend}
+                disabled={searchingBackend || !searchLog.trim()}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--wa-brand)',
+                  background: searchingBackend ? 'var(--wa-surface-2)' : 'var(--wa-brand)',
+                  color: searchingBackend ? 'var(--wa-muted)' : '#fff',
+                  cursor: searchingBackend || !searchLog.trim() ? 'not-allowed' : 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  fontFamily: "'Segoe UI', Tajawal, sans-serif",
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap' as const,
+                }}
+              >
+                {searchingBackend ? '⏳' : '🔍'}
+              </button>
+            </div>
+            {showSearchResults && searchResults.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 999,
+                  background: 'var(--wa-surface)',
+                  border: '1px solid var(--wa-brand)',
+                  borderRadius: '0 0 10px 10px',
+                  maxHeight: '60vh',
+                  overflowY: 'auto' as const,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                }}
+              >
+                <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <span style={{fontSize: '12px', fontWeight: 700, color: 'var(--wa-brand)'}}>🔍 {searchResults.length} نتيجة في {new Set(searchResults.map(r => r.threadId)).size} محادثة</span>
+                  <button type="button" onClick={() => setShowSearchResults(false)} style={{background: 'transparent', border: 'none', color: 'var(--wa-muted)', cursor: 'pointer', fontSize: '16px'}}>✕</button>
+                </div>
+                {(() => {
+                  // Group results by thread
+                  const grouped = new Map<string, typeof searchResults>()
+                  for (const r of searchResults) {
+                    if (!grouped.has(r.threadId)) grouped.set(r.threadId, [])
+                    grouped.get(r.threadId)!.push(r)
+                  }
+                  return Array.from(grouped.entries()).map(([threadId, msgs]) => (
+                    <div key={threadId} style={{borderBottom: '1px solid var(--wa-border)'}}>
+                      <div style={{padding: '8px 12px', background: 'var(--wa-surface-2)', fontSize: '12px', fontWeight: 700, color: 'var(--wa-text)', direction: 'rtl' as const}}>
+                        {msgs[0].threadName} <span style={{color: 'var(--wa-muted)', fontWeight: 400, direction: 'ltr' as const, display: 'inline-block'}}>{msgs[0].threadPhone}</span>
+                        <span style={{color: 'var(--wa-brand)', marginRight: '8px', fontSize: '11px'}}> ({msgs.length} نتيجة)</span>
+                      </div>
+                      {msgs.slice(0, 10).map((r) => {
+                        const q = searchLog.trim().toLowerCase()
+                        const body = r.msgBody || ''
+                        const idx = body.toLowerCase().indexOf(q)
+                        let preview = body.substring(0, 80)
+                        if (idx >= 0) {
+                          const start = Math.max(0, idx - 20)
+                          const end = Math.min(body.length, idx + q.length + 40)
+                          preview = (start > 0 ? '...' : '') + body.substring(start, end) + (end < body.length ? '...' : '')
+                        }
+                        return (
+                          <button
+                            key={r.msgKey}
+                            type="button"
+                            onClick={() => handleSearchResultClick(r.threadId, r.msgKey)}
+                            style={{
+                              width: '100%',
+                              textAlign: 'right' as const,
+                              padding: '8px 16px',
+                              border: 'none',
+                              borderBottom: '1px dashed var(--wa-border)',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              color: 'var(--wa-text)',
+                              fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                              fontSize: '12px',
+                              direction: 'rtl' as const,
+                              transition: 'background 0.12s',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(37,211,102,0.08)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <div style={{display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between'}}>
+                              <span style={{color: r.direction === 'outgoing' ? '#16a34a' : '#3b82f6', fontSize: '10px', flexShrink: 0}}>
+                                {r.direction === 'outgoing' ? '📤' : '📥'}
+                              </span>
+                              <span style={{flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const}}>
+                                {(() => {
+                                  if (idx < 0) return preview
+                                  const start = Math.max(0, idx - 20)
+                                  const beforeHL = body.substring(start, idx)
+                                  const hl = body.substring(idx, idx + q.length)
+                                  const afterHL = body.substring(idx + q.length, idx + q.length + 40)
+                                  return <>{start > 0 ? '...' : ''}{beforeHL}<mark style={{background: 'rgba(37,211,102,0.35)', borderRadius: '2px', padding: '0 1px'}}>{hl}</mark>{afterHL}{idx + q.length + 40 < body.length ? '...' : ''}</>
+                                })()}
+                              </span>
+                              <span style={{fontSize: '10px', color: 'var(--wa-muted)', flexShrink: 0, direction: 'ltr' as const}}>
+                                {r.sentAt ? new Date(r.sentAt).toLocaleString('ar-SA', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : ''}
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                      {msgs.length > 10 && (
+                        <div style={{padding: '6px 16px', fontSize: '11px', color: 'var(--wa-muted)', textAlign: 'center'}}>+{msgs.length - 10} نتيجة أخرى...</div>
+                      )}
+                    </div>
+                  ))
+                })()}
+              </div>
+            )}
+          </div>
 
           <div
             style={{
@@ -4267,8 +4468,8 @@ export function WhatsAppTool() {
                         const docName = documentDownloadName(c.messageBody)
                         return (
                           <div
-                            id={`msg-${c._key}`}
                             key={c._key || `${c._id}-${Math.random()}`}
+                            data-msg-key={c._key || ''}
                             className="wa-msg-row"
                             style={{
                               display: 'flex',
@@ -4277,6 +4478,7 @@ export function WhatsAppTool() {
                               alignItems: out ? 'flex-start' : 'flex-end',
                               paddingTop: '4px',
                               paddingBottom: '4px',
+                              transition: 'background 0.3s',
                             }}
                           >
                             <div
