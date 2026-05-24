@@ -1002,7 +1002,7 @@ export function WhatsAppTool() {
   const fetchConversations = useCallback((opts?: {silent?: boolean; onError?: 'silent' | 'alert'}) => {
     const silent = opts?.silent === true
     if (!silent) setLoadingLog(true)
-    client
+    return client
       .fetch<any[]>(
         `*[_type == "whatsappThread"] | order(lastMessageAt desc)[0..99] {
         _id, patientName, phoneNumber, lastMessageAt, messages
@@ -1046,9 +1046,13 @@ export function WhatsAppTool() {
   const refreshConversationsManually = useCallback(async () => {
     if (refreshingChats) return
     setRefreshingChats(true)
-    await fetchConversations({silent: true, onError: 'alert'})
-    setRefreshingChats(false)
-  }, [fetchConversations, refreshingChats])
+    try {
+      await fetchConversations({silent: true, onError: 'alert'})
+      showAlert('ok', '✅ تم تحديث المحادثات')
+    } finally {
+      setRefreshingChats(false)
+    }
+  }, [fetchConversations, refreshingChats, showAlert])
 
   const handleExportSanityConversations = useCallback(async () => {
     if (exportChatsBusy) return
