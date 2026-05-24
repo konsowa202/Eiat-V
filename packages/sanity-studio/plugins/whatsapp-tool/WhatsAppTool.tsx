@@ -2398,6 +2398,29 @@ export function WhatsAppTool() {
     }
   }
 
+  const handleLoadOlderMessages = async () => {
+    if (!effectiveActiveThread || loadingOlder) return
+    
+    // If we have more messages locally that aren't rendered yet, just show them
+    if (renderedCount < effectiveActiveThread.messages.length) {
+      // Remember current scroll height to adjust scroll after render
+      const el = chatScrollRef.current
+      const oldScrollHeight = el ? el.scrollHeight : 0
+      
+      setRenderedCount(prev => prev + 50)
+      
+      // Attempt to maintain scroll position
+      setTimeout(() => {
+        if (el) {
+          const newScrollHeight = el.scrollHeight
+          el.scrollTop = el.scrollTop + (newScrollHeight - oldScrollHeight)
+        }
+      }, 0)
+    } else {
+      showAlert('info', 'تم عرض جميع الرسائل السابقة 🌟')
+    }
+  }
+
   useEffect(() => {
     if (tab !== 'chats') return
     if (creatingNewChat) return
@@ -2432,88 +2455,6 @@ export function WhatsAppTool() {
     return () => clearTimeout(t)
   }, [selectedThreadKey, newestMsgId, tab, logTableMode])
 
-  const handleLoadOlderMessages = async () => {
-    if (!effectiveActiveThread || loadingOlder) return
-    
-    // If we have more messages locally that aren't rendered yet, just show them
-    if (renderedCount < effectiveActiveThread.messages.length) {
-      // Remember current scroll height to adjust scroll after render
-      const el = chatScrollRef.current
-      const oldScrollHeight = el ? el.scrollHeight : 0
-      
-      setRenderedCount(prev => prev + 50)
-      
-      // Attempt to maintain scroll position
-      setTimeout(() => {
-        if (el) {
-          const newScrollHeight = el.scrollHeight
-          el.scrollTop = el.scrollTop + (newScrollHeight - oldScrollHeight)
-        }
-      }, 0)
-      return
-    }
-
-    setLoadingOlder(true)
-    try {
-      const msgs = effectiveActiveThread.messages
-      if (!msgs.length) {
-        setLoadingOlder(false)
-        return
-      }
-      // The array is sorted by sentAt ascending (oldest first)
-      const oldestMsg = msgs[0]
-      const phoneStr = effectiveActiveThread.sendPhone
-      const digits = phoneStr.replace(/\D/g, '')
-      if (digits.length < 8) {
-        showAlert('err', 'رقم الهاتف غير صالح لجلب الرسائل')
-        setLoadingOlder(false)
-        return
-      }
-
-      const olderThreads = await client.fetch<any[]>(
-        `*[_type == "whatsappThread" && phoneNumber match "*${digits}*"] | order(lastMessageAt desc)[0...100] {
-          _id, patientName, phoneNumber, lastMessageAt, messages
-        }`
-      )
-
-      const olderMsgs: any[] = []
-      for (const thread of olderThreads || []) {
-        for (const msg of thread.messages || []) {
-          olderMsgs.push({
-            _id: thread._id,
-            _key: msg._key,
-            patientName: thread.patientName,
-            phoneNumber: thread.phoneNumber,
-            messageBody: msg.messageBody,
-            templateUsed: msg.templateUsed,
-            status: msg.status,
-            direction: msg.direction,
-            wamid: msg.wamid,
-            sentAt: msg.sentAt,
-            errorMessage: msg.errorMessage,
-            messageKind: msg.messageKind,
-            waMediaId: msg.waMediaId
-          })
-        }
-      }
-
-      if (olderMsgs.length > 0) {
-        setConversations(prev => {
-          const existingKeys = new Set(prev.map(c => c._key))
-          const newOnes = olderMsgs.filter(c => !existingKeys.has(c._key))
-          return [...prev, ...newOnes]
-        })
-        showAlert('ok', `✅ تم تحميل رسائل أقدم`)
-      } else {
-        showAlert('ok', 'لا توجد رسائل أقدم من ذلك')
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'حدث خطأ'
-      showAlert('err', `❌ فشل جلب الرسائل القديمة: ${msg}`)
-    } finally {
-      setLoadingOlder(false)
-    }
-  }
 
   const handleSearchBackend = async () => {
     const q = searchLog.trim()
@@ -2993,17 +2934,34 @@ export function WhatsAppTool() {
                     fontSize: '12px',
                   }}
                 >
-                  📂 رفع ملف أرقام (txt/csv)
+                  📂 رفع ملف أرقام (txt/csv/excel)
                   <input
                     type="file"
-                    accept=".txt,.csv"
+                    accept=".txt,.csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     style={{display: 'none'}}
                     onChange={async (e) => {
                       const f = e.target.files?.[0]
                       if (!f) return
-                      const content = await f.text()
-                      const merged = [sendBroadcastNumbersRaw, content].filter(Boolean).join('\n')
-                      setSendBroadcastNumbersRaw(merged)
+                      let content = ''
+                      if (f.name.endsWith('.xls') || f.name.endsWith('.xlsx')) {
+                        try {
+                          const fd = new FormData()
+                          fd.append('file', f)
+                          const r = await fetch(waApiAbs('/api/whatsapp/parse-excel'), {method: 'POST', body: fd})
+                          const data = await parseApiResponse(r)
+                          if (data.targets && Array.isArray(data.targets)) {
+                            content = data.targets.map((t: any) => `${t.name} - ${t.phoneE164}`).join('\n')
+                          }
+                        } catch (err) {
+                          showAlert('err', 'فشل قراءة ملف الاكسل')
+                        }
+                      } else {
+                        content = await f.text()
+                      }
+                      if (content) {
+                        const merged = [sendBroadcastNumbersRaw, content].filter(Boolean).join('\n')
+                        setSendBroadcastNumbersRaw(merged)
+                      }
                       e.target.value = ''
                     }}
                   />
