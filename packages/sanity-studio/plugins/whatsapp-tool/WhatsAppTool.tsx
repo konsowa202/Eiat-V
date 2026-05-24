@@ -2140,29 +2140,7 @@ export function WhatsAppTool() {
     }
   }, [tab, filteredThreads, selectedThreadKey, creatingNewChat])
 
-  useEffect(() => {
-    if (tab !== 'chats' || logTableMode) return
-    
-    // Multiple scroll attempts to handle large DOM renders and image loading delays
-    const doScroll = () => {
-      const el = chatScrollRef.current
-      if (el) el.scrollTop = el.scrollHeight
-      chatBottomRef.current?.scrollIntoView({ behavior: 'auto' })
-    }
-    
-    doScroll()
-    const t1 = setTimeout(doScroll, 10)
-    const t2 = setTimeout(doScroll, 100)
-    const t3 = setTimeout(doScroll, 350)
-    const t4 = setTimeout(doScroll, 800)
-    
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(t3)
-      clearTimeout(t4)
-    }
-  }, [tab, activeThread?.messages.length, selectedThreadKey, logTableMode])
+  // Javascript scroll hack removed in favor of CSS column-reverse
 
   return (
     <div
@@ -3784,7 +3762,7 @@ export function WhatsAppTool() {
                         overflowY: 'auto' as const,
                         padding: '16px 14px 20px',
                         display: 'flex',
-                        flexDirection: 'column' as const,
+                        flexDirection: 'column-reverse' as const,
                         gap: '6px',
                       }}
                       onClick={() => {
@@ -3795,7 +3773,7 @@ export function WhatsAppTool() {
                         setLongPressMenu(null)
                       }}
                     >
-                      {effectiveActiveThread.messages.map((c) => {
+                      {effectiveActiveThread.messages.slice().reverse().map((c) => {
                         const out = c.direction === 'outgoing'
                         const kind = c.messageKind || 'text'
                         const src = c.waMediaId ? mediaSrc(c.waMediaId) : ''
