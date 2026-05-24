@@ -1008,7 +1008,12 @@ export function WhatsAppTool() {
         status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
       }`,
       )
-      .then((d) => setConversations(d || []))
+      .then((d) => setConversations(prev => {
+        if (!prev || prev.length === 0) return d || []
+        const newIds = new Set((d || []).map(x => x._id))
+        const oldOnesToKeep = prev.filter(x => !newIds.has(x._id))
+        return [...(d || []), ...oldOnesToKeep]
+      }))
       .catch((err: unknown) => {
         if (opts?.onError === 'alert') {
           const msg = err instanceof Error ? err.message : 'تعذر تحديث المحادثات'
@@ -1023,7 +1028,7 @@ export function WhatsAppTool() {
   const refreshConversationsManually = useCallback(async () => {
     if (refreshingChats) return
     setRefreshingChats(true)
-    await fetchConversations({silent: false, onError: 'alert'})
+    await fetchConversations({silent: true, onError: 'alert'})
     setRefreshingChats(false)
   }, [fetchConversations, refreshingChats])
 
