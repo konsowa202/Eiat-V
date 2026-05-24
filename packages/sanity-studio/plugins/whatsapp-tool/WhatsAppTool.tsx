@@ -2411,8 +2411,50 @@ export function WhatsAppTool() {
           el.scrollTop = el.scrollTop + (newScrollHeight - oldScrollHeight)
         }
       }, 0)
-    } else {
-      showAlert('ok', 'تم عرض جميع الرسائل السابقة 🌟')
+      return
+    }
+
+    const firstMsg = effectiveActiveThread.messages[0]
+    if (!firstMsg || !firstMsg._id) return
+
+    setLoadingOlder(true)
+    try {
+      const res = await client.fetch<{ _id: string, patientName: string, phoneNumber: string, messages: any[] }>(
+        `*[_type == "whatsappThread" && _id == $threadId][0]{
+          _id, patientName, phoneNumber,
+          "messages": messages[sentAt < $oldestSentAt] | order(sentAt desc)[0...50]
+        }`,
+        {
+          threadId: firstMsg._id,
+          oldestSentAt: firstMsg.sentAt || new Date().toISOString()
+        }
+      )
+
+      if (res && res.messages && res.messages.length > 0) {
+        setConversations(prev => {
+          const flat = [...prev]
+          for (const m of res.messages) {
+            if (!flat.find(x => x._key === m._key)) {
+              flat.push({
+                _id: res._id,
+                _key: m._key,
+                patientName: res.patientName,
+                phoneNumber: res.phoneNumber,
+                ...m
+              })
+            }
+          }
+          flat.sort((a, b) => new Date(b.sentAt || '').getTime() - new Date(a.sentAt || '').getTime())
+          return flat
+        })
+        setRenderedCount(prev => prev + 50)
+      } else {
+        showAlert('ok', 'تم عرض جميع الرسائل السابقة 🌟')
+      }
+    } catch (err) {
+      showAlert('err', '❌ فشل تحميل الرسائل السابقة')
+    } finally {
+      setLoadingOlder(false)
     }
   }
 
@@ -4214,7 +4256,7 @@ export function WhatsAppTool() {
                         const docName = documentDownloadName(c.messageBody)
                         return (
                           <div
-                            key={c._id}
+                            key={c._key || `${c._id}-${Math.random()}`}
                             className="wa-msg-row"
                             style={{
                               display: 'flex',
