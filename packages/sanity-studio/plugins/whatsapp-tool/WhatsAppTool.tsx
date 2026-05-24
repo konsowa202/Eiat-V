@@ -2417,7 +2417,7 @@ export function WhatsAppTool() {
         }
       }, 0)
     } else {
-      showAlert('info', 'تم عرض جميع الرسائل السابقة 🌟')
+      showAlert('ok', 'تم عرض جميع الرسائل السابقة 🌟')
     }
   }
 
