@@ -762,6 +762,8 @@ export function WhatsAppTool() {
   const [logFilter, setLogFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
   const [showUnreadOnly, setShowUnreadOnly] = useState(false)
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [searchingBackend, setSearchingBackend] = useState(false)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
   const [creatingNewChat, setCreatingNewChat] = useState(false)
@@ -1000,7 +1002,7 @@ export function WhatsAppTool() {
     if (!silent) setLoadingLog(true)
     client
       .fetch<ConversationDoc[]>(
-        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..4999] {
+        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..1999] {
         _id, patientName, phoneNumber, messageBody, templateUsed,
         status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
       }`,
@@ -2139,6 +2141,87 @@ export function WhatsAppTool() {
       startTransition(() => setSelectedThreadKey(filteredThreads[0].key))
     }
   }, [tab, filteredThreads, selectedThreadKey, creatingNewChat])
+
+  const handleLoadOlderMessages = async () => {
+    if (!effectiveActiveThread || loadingOlder) return
+    setLoadingOlder(true)
+    try {
+      const msgs = effectiveActiveThread.messages
+      if (!msgs.length) {
+        setLoadingOlder(false)
+        return
+      }
+      // The array is sorted by sentAt ascending (oldest first)
+      const oldestMsg = msgs[0]
+      const phoneStr = effectiveActiveThread.sendPhone
+      const digits = phoneStr.replace(/\D/g, '')
+      if (digits.length < 8) {
+        showAlert('err', 'رقم الهاتف غير صالح لجلب الرسائل')
+        setLoadingOlder(false)
+        return
+      }
+
+      const olderMsgs = await client.fetch<ConversationDoc[]>(
+        `*[_type == "whatsappConversation" && phoneNumber match "*${digits}*" && sentAt < $oldestAt] | order(sentAt desc)[0...100] {
+          _id, patientName, phoneNumber, messageBody, templateUsed,
+          status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
+        }`,
+        { oldestAt: oldestMsg.sentAt }
+      )
+
+      if (olderMsgs && olderMsgs.length > 0) {
+        setConversations(prev => {
+          const existingIds = new Set(prev.map(c => c._id))
+          const newOnes = olderMsgs.filter(c => !existingIds.has(c._id))
+          return [...prev, ...newOnes]
+        })
+        showAlert('ok', `✅ تم تحميل ${olderMsgs.length} رسالة أقدم`)
+      } else {
+        showAlert('ok', 'لا توجد رسائل أقدم من ذلك')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'حدث خطأ'
+      showAlert('err', `❌ فشل جلب الرسائل القديمة: ${msg}`)
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
+
+  const handleSearchBackend = async () => {
+    const q = searchLog.trim()
+    if (!q || searchingBackend) return
+    setSearchingBackend(true)
+    try {
+      const digits = q.replace(/\D/g, '')
+      let query = ''
+      if (digits.length >= 4) {
+        query = `*[_type == "whatsappConversation" && phoneNumber match "*${digits}*"] | order(sentAt desc)[0...50]`
+      } else {
+        query = `*[_type == "whatsappConversation" && patientName match "*${q}*"] | order(sentAt desc)[0...50]`
+      }
+      const results = await client.fetch<ConversationDoc[]>(
+        query + ` {
+          _id, patientName, phoneNumber, messageBody, templateUsed,
+          status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
+        }`
+      )
+      if (results && results.length > 0) {
+        setConversations(prev => {
+          const existingIds = new Set(prev.map(c => c._id))
+          const newOnes = results.filter(c => !existingIds.has(c._id))
+          return [...prev, ...newOnes]
+        })
+        showAlert('ok', `✅ تم إيجاد ${results.length} رسالة من الأرشيف`)
+      } else {
+        showAlert('ok', 'لا توجد نتائج في الأرشيف (السيرفر)')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'حدث خطأ'
+      showAlert('err', `❌ فشل البحث في السيرفر: ${msg}`)
+    } finally {
+      setSearchingBackend(false)
+    }
+  }
 
   // Javascript scroll hack removed in favor of CSS column-reverse
 
@@ -3339,6 +3422,26 @@ export function WhatsAppTool() {
                 أرسل من تبويب «إرسال رسالة» أو تأكد أن Webhook واتساب يُرسل إلى
                 /api/whatsapp/webhook على نفس الدومين (مثلاً Vercel).
               </div>
+              {searchLog && (
+                <button
+                  type="button"
+                  onClick={handleSearchBackend}
+                  disabled={searchingBackend}
+                  style={{
+                    marginTop: '16px',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--wa-brand)',
+                    background: 'var(--wa-brand)',
+                    color: '#fff',
+                    cursor: searchingBackend ? 'not-allowed' : 'pointer',
+                    fontWeight: 700,
+                    fontFamily: "'Segoe UI', Tajawal, sans-serif"
+                  }}
+                >
+                  {searchingBackend ? 'جاري البحث...' : '🔍 البحث في أرشيف السيرفر بالكامل'}
+                </button>
+              )}
             </div>
           ) : (
             <div
@@ -3976,6 +4079,31 @@ export function WhatsAppTool() {
                           </div>
                         )
                       })}
+                      
+                      {/* زر تحميل الرسائل السابقة يظهر في أعلى الشات المرئي (أسفل الـ DOM بسبب column-reverse) */}
+                      {effectiveActiveThread.messages.length > 0 && (
+                        <div style={{ textAlign: 'center', margin: '8px 0 16px 0', width: '100%' }}>
+                          <button
+                            type="button"
+                            onClick={handleLoadOlderMessages}
+                            disabled={loadingOlder}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: '20px',
+                              border: '1px solid var(--wa-border)',
+                              background: 'var(--wa-surface-2)',
+                              color: 'var(--wa-text)',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: loadingOlder ? 'not-allowed' : 'pointer',
+                              fontFamily: "'Segoe UI', Tajawal, sans-serif"
+                            }}
+                          >
+                            {loadingOlder ? 'جاري التحميل...' : '⬆️ تحميل الرسائل السابقة'}
+                          </button>
+                        </div>
+                      )}
+
                       <div ref={chatBottomRef} style={{ height: 1, flexShrink: 0 }} />
                     </div>
                     <div
