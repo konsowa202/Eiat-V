@@ -34,17 +34,22 @@ export async function POST(req: NextRequest) {
       message?: string;
       templateUsed?: string;
       templateParams?: Record<string, string>;
+      metaTemplate?: any;
       cursor?: number;
       batchSize?: number;
       tag?: string;
     };
 
     const message = String(body.message || "").trim();
-    if (!message) return jsonCors({success: false, error: "message missing"}, {status: 400});
+    // Allow empty message if a Meta Template is used
+    if (!message && !body.metaTemplate) {
+      return jsonCors({success: false, error: "message missing"}, {status: 400});
+    }
     const templateUsed = String(body.templateUsed || "Broadcast").trim() || "Broadcast";
     const templateParams = body.templateParams || {};
+    const metaTemplate = body.metaTemplate;
     const cursor = Math.max(0, Number(body.cursor) || 0);
-    const batchSize = Math.min(1000, Math.max(50, Number(body.batchSize) || 250));
+    const batchSize = Math.min(100, Math.max(10, Number(body.batchSize) || 50));
     const tag = String(body.tag || "").trim();
 
     const start = cursor;
@@ -99,6 +104,7 @@ export async function POST(req: NextRequest) {
               ...templateParams,
               patientName: (c.name || "").trim() || templateParams.patientName || "عميلنا العزيز",
             },
+            metaTemplate,
           }),
         });
         const data = (await res.json().catch(() => ({}))) as {success?: boolean};

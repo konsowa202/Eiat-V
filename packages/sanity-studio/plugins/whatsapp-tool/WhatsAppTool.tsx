@@ -773,7 +773,7 @@ export function WhatsAppTool() {
   const [sendBroadcastMode, setSendBroadcastMode] = useState(false)
   const [sendBroadcastNumbersRaw, setSendBroadcastNumbersRaw] = useState('')
   const [sendFromSavedContacts, setSendFromSavedContacts] = useState(false)
-  const [contactsBatchSize, setContactsBatchSize] = useState(300)
+  const [contactsBatchSize, setContactsBatchSize] = useState(50)
   const [activeContactsCount, setActiveContactsCount] = useState(0)
   const [campaignProgress, setCampaignProgress] = useState<{
     total: number
@@ -1208,8 +1208,35 @@ export function WhatsAppTool() {
 
   // Send message via our own server-side API
   const handleSend = async () => {
-    const text = selectedTpl ? preview() : customMsg
-    if (!text.trim()) return showAlert('err', '⚠️ اختر قالب أو اكتب رسالة')
+    const t = selectedMetaTpl
+    const isMetaTemplate = !!t
+    let headerImageFields = {}
+    
+    if (isMetaTemplate) {
+      const hVarCount = t.headerVariableCount ?? 0
+      if (t.headerFormat === 'TEXT' && hVarCount > 0) {
+        for (let i = 0; i < hVarCount; i++) {
+          if (!String(metaHeaderTextValues[i] ?? '').trim()) {
+            return showAlert('err', `⚠️ املأ نص الهيدر ${i + 1} للقالب`)
+          }
+        }
+      }
+      for (let i = 0; i < t.bodyVariableCount; i++) {
+        if (!String(metaParamValues[i] ?? '').trim()) {
+          const hint = selectedMetaParamHints[i]
+          return showAlert('err', `⚠️ املأ ${hint?.label || `القيمة ${i + 1}`} في القالب`)
+        }
+      }
+      const hdr = metaHeaderImageInput.trim()
+      headerImageFields = hdr.startsWith('https://')
+        ? {headerImageLink: hdr}
+        : hdr.startsWith('image-') && !hdr.includes('/')
+          ? {headerImageSanityRef: hdr}
+          : {}
+    }
+
+    const text = isMetaTemplate ? '' : (selectedTpl ? preview() : customMsg)
+    if (!isMetaTemplate && !text.trim()) return showAlert('err', '⚠️ اختر قالب أو اكتب رسالة')
 
     if (sendBroadcastMode && sendFromSavedContacts) {
       setSending(true)
@@ -1221,22 +1248,32 @@ export function WhatsAppTool() {
       let failed = 0
       let processed = 0
       try {
-        const maxLoops = 1200
+        const maxLoops = 1500
         for (let loop = 0; loop < maxLoops; loop++) {
           const res = await fetch(waApiAbs('/api/whatsapp/send-contacts-batch'), {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
               message: text,
-              templateUsed: selectedTpl?.name || 'Broadcast',
+              templateUsed: isMetaTemplate ? t.name : (selectedTpl?.name || 'Broadcast'),
               templateParams: {
                 patientName: patientName || 'عميلنا العزيز',
                 appointmentDate: appointmentDate || new Date().toLocaleDateString('ar-SA'),
                 doctorName: doctorName || 'عيادات إيات',
                 location: 'حي الأندلس، جدة',
               },
+              metaTemplate: isMetaTemplate ? {
+                name: t.name,
+                languageCode: t.language,
+                bodyParameterValues: metaParamValues.slice(0, t.bodyVariableCount),
+                headerFormat: t.headerFormat,
+                ...(t.headerFormat === 'TEXT' && (t.headerVariableCount || 0) > 0 ? {
+                  headerParameterValues: metaHeaderTextValues.slice(0, t.headerVariableCount || 0)
+                } : {}),
+                ...headerImageFields,
+              } : undefined,
               cursor,
-              batchSize: Math.min(1000, Math.max(50, contactsBatchSize || 300)),
+              batchSize: Math.min(100, Math.max(10, contactsBatchSize || 50)),
             }),
           })
           const data = await parseApiResponse(res)
@@ -2654,10 +2691,10 @@ export function WhatsAppTool() {
                     <input
                       style={{...S.input, marginBottom: '6px'}}
                       type="number"
-                      min={50}
-                      max={1000}
+                      min={10}
+                      max={100}
                       value={contactsBatchSize}
-                      onChange={(e) => setContactsBatchSize(Math.max(50, Math.min(1000, Number(e.target.value) || 300)))}
+                      onChange={(e) => setContactsBatchSize(Math.max(10, Math.min(100, Number(e.target.value) || 50)))}
                     />
                     <div style={{fontSize: '11px', color: 'var(--wa-muted)'}}>
                       كل دفعة تُرسل تدريجيًا من الخادم مع حفظ السجل. مناسب لأحجام كبيرة مثل 15000 جهة.
