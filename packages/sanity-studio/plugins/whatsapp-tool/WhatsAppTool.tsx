@@ -340,8 +340,8 @@ function normalizePhone(p: string): string {
   return `+${digits}`
 }
 
-function phoneDigits(phone: string): string {
-  return phone.replace(/\D/g, '')
+function phoneDigits(phone?: string): string {
+  return (phone || '').replace(/\D/g, '')
 }
 
 function commonSuffixLen(a: string, b: string): number {
@@ -366,7 +366,8 @@ function samePersonDigits(a: string, b: string): boolean {
   return false
 }
 
-function resolveThreadKey(phone: string, existingKeys: string[]): string {
+function resolveThreadKey(phone: string | undefined, existingKeys: string[]): string {
+  if (!phone) return 'unknown-' + Math.random().toString(36).substring(2)
   const digits = phoneDigits(phone)
   if (!digits) return phone
   const found = existingKeys.find((k) => samePersonDigits(k, digits))
