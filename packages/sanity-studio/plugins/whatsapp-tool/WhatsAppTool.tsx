@@ -763,6 +763,7 @@ export function WhatsAppTool() {
   const [showUnreadOnly, setShowUnreadOnly] = useState(false)
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const [renderedCount, setRenderedCount] = useState(50)
   const [searchingBackend, setSearchingBackend] = useState(false)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
@@ -1002,7 +1003,7 @@ export function WhatsAppTool() {
     if (!silent) setLoadingLog(true)
     client
       .fetch<ConversationDoc[]>(
-        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..1999] {
+        `*[_type == "whatsappConversation"] | order(sentAt desc)[0..2999] {
         _id, patientName, phoneNumber, messageBody, templateUsed,
         status, direction, wamid, sentAt, errorMessage, messageKind, waMediaId
       }`,
@@ -2142,8 +2143,49 @@ export function WhatsAppTool() {
     }
   }, [tab, filteredThreads, selectedThreadKey, creatingNewChat])
 
+  // Reset rendered count when switching threads
+  useEffect(() => {
+    setRenderedCount(50)
+  }, [selectedThreadKey])
+
+  // Robust scroll to bottom on thread switch or new message
+  const activeMessagesLen = effectiveActiveThread?.messages.length || 0
+  const newestMsgId = activeMessagesLen > 0 ? effectiveActiveThread!.messages[activeMessagesLen - 1]._id : null
+  
+  useEffect(() => {
+    if (tab !== 'chats' || logTableMode) return
+    const doScroll = () => {
+      const el = chatScrollRef.current
+      if (el) {
+        el.scrollTop = el.scrollHeight
+      }
+    }
+    doScroll()
+    const t = setTimeout(doScroll, 150)
+    return () => clearTimeout(t)
+  }, [selectedThreadKey, newestMsgId, tab, logTableMode])
+
   const handleLoadOlderMessages = async () => {
     if (!effectiveActiveThread || loadingOlder) return
+    
+    // If we have more messages locally that aren't rendered yet, just show them
+    if (renderedCount < effectiveActiveThread.messages.length) {
+      // Remember current scroll height to adjust scroll after render
+      const el = chatScrollRef.current
+      const oldScrollHeight = el ? el.scrollHeight : 0
+      
+      setRenderedCount(prev => prev + 50)
+      
+      // Attempt to maintain scroll position
+      setTimeout(() => {
+        if (el) {
+          const newScrollHeight = el.scrollHeight
+          el.scrollTop = el.scrollTop + (newScrollHeight - oldScrollHeight)
+        }
+      }, 0)
+      return
+    }
+
     setLoadingOlder(true)
     try {
       const msgs = effectiveActiveThread.messages
@@ -3865,7 +3907,7 @@ export function WhatsAppTool() {
                         overflowY: 'auto' as const,
                         padding: '16px 14px 20px',
                         display: 'flex',
-                        flexDirection: 'column-reverse' as const,
+                        flexDirection: 'column' as const,
                         gap: '6px',
                       }}
                       onClick={() => {
@@ -3876,7 +3918,31 @@ export function WhatsAppTool() {
                         setLongPressMenu(null)
                       }}
                     >
-                      {effectiveActiveThread.messages.slice().reverse().map((c) => {
+                      {/* زر تحميل الرسائل السابقة يظهر في أعلى الشات المرئي */}
+                      {effectiveActiveThread.messages.length > 0 && (
+                        <div style={{ textAlign: 'center', margin: '8px 0 16px 0', width: '100%' }}>
+                          <button
+                            type="button"
+                            onClick={handleLoadOlderMessages}
+                            disabled={loadingOlder}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: '20px',
+                              border: '1px solid var(--wa-border)',
+                              background: 'var(--wa-surface-2)',
+                              color: 'var(--wa-text)',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: loadingOlder ? 'not-allowed' : 'pointer',
+                              fontFamily: "'Segoe UI', Tajawal, sans-serif"
+                            }}
+                          >
+                            {loadingOlder ? 'جاري التحميل...' : '⬆️ تحميل الرسائل السابقة'}
+                          </button>
+                        </div>
+                      )}
+
+                      {effectiveActiveThread.messages.slice(-renderedCount).map((c) => {
                         const out = c.direction === 'outgoing'
                         const kind = c.messageKind || 'text'
                         const src = c.waMediaId ? mediaSrc(c.waMediaId) : ''
@@ -4079,31 +4145,6 @@ export function WhatsAppTool() {
                           </div>
                         )
                       })}
-                      
-                      {/* زر تحميل الرسائل السابقة يظهر في أعلى الشات المرئي (أسفل الـ DOM بسبب column-reverse) */}
-                      {effectiveActiveThread.messages.length > 0 && (
-                        <div style={{ textAlign: 'center', margin: '8px 0 16px 0', width: '100%' }}>
-                          <button
-                            type="button"
-                            onClick={handleLoadOlderMessages}
-                            disabled={loadingOlder}
-                            style={{
-                              padding: '8px 16px',
-                              borderRadius: '20px',
-                              border: '1px solid var(--wa-border)',
-                              background: 'var(--wa-surface-2)',
-                              color: 'var(--wa-text)',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              cursor: loadingOlder ? 'not-allowed' : 'pointer',
-                              fontFamily: "'Segoe UI', Tajawal, sans-serif"
-                            }}
-                          >
-                            {loadingOlder ? 'جاري التحميل...' : '⬆️ تحميل الرسائل السابقة'}
-                          </button>
-                        </div>
-                      )}
-
                       <div ref={chatBottomRef} style={{ height: 1, flexShrink: 0 }} />
                     </div>
                     <div
