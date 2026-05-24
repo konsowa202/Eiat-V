@@ -760,7 +760,7 @@ export function WhatsAppTool() {
   const [showUnreadOnly, setShowUnreadOnly] = useState(false)
   const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
-  const [renderedCount, setRenderedCount] = useState(50)
+  const [renderedCount, setRenderedCount] = useState(1000)
   const [searchingBackend, setSearchingBackend] = useState(false)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
@@ -2472,7 +2472,7 @@ export function WhatsAppTool() {
 
   // Reset rendered count when switching threads
   useEffect(() => {
-    setRenderedCount(50)
+    setRenderedCount(1000)
   }, [selectedThreadKey])
 
   // Robust scroll to bottom on thread switch or new message
@@ -2484,13 +2484,24 @@ export function WhatsAppTool() {
     const doScroll = () => {
       const el = chatScrollRef.current
       if (el) {
+        if (searchLog.trim() && effectiveActiveThread) {
+          const q = searchLog.trim().toLowerCase()
+          const matchedMsg = effectiveActiveThread.messages.find(m => (m.messageBody || '').toLowerCase().includes(q))
+          if (matchedMsg && matchedMsg._key) {
+            const msgEl = document.getElementById(`msg-${matchedMsg._key}`)
+            if (msgEl) {
+              msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              return
+            }
+          }
+        }
         el.scrollTop = el.scrollHeight
       }
     }
     doScroll()
     const t = setTimeout(doScroll, 150)
     return () => clearTimeout(t)
-  }, [selectedThreadKey, newestMsgId, tab, logTableMode])
+  }, [selectedThreadKey, newestMsgId, tab, logTableMode, searchLog, effectiveActiveThread])
 
 
   const handleSearchBackend = async () => {
@@ -2503,7 +2514,7 @@ export function WhatsAppTool() {
       if (digits.length >= 4) {
         query = `*[_type == "whatsappThread" && phoneNumber match "*${digits}*"] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
       } else {
-        query = `*[_type == "whatsappThread" && patientName match "*${q}*"] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
+        query = `*[_type == "whatsappThread" && (patientName match "*${q}*" || messages[].messageBody match "*${q}*")] | order(lastMessageAt desc)[0...50] { _id, patientName, phoneNumber, lastMessageAt, messages }`
       }
       const searchThreads = await client.fetch<any[]>(query)
       const results: any[] = []
@@ -4256,6 +4267,7 @@ export function WhatsAppTool() {
                         const docName = documentDownloadName(c.messageBody)
                         return (
                           <div
+                            id={`msg-${c._key}`}
                             key={c._key || `${c._id}-${Math.random()}`}
                             className="wa-msg-row"
                             style={{
