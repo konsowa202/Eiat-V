@@ -48,7 +48,7 @@ export default defineConfig({
                   .title('واتساب')
                   .items([
                     S.documentTypeListItem('whatsappTemplate').title('📋 قوالب الرسائل'),
-                    S.documentTypeListItem('whatsappConversation').title('💬 سجل المحادثات'),
+                    S.documentTypeListItem('whatsappThread').title('💬 سجل المحادثات'),
                     S.documentTypeListItem('whatsappContact').title('👤 جهات الاتصال'),
                   ])
               ),
