@@ -815,6 +815,26 @@ export function WhatsAppTool() {
     x: number
     y: number
   } | null>(null)
+  // Pinned threads
+  const [pinnedThreadKeys, setPinnedThreadKeys] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = window.localStorage.getItem('eiat_wa_pinned_threads')
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+    } catch { return new Set() }
+  })
+  const [sidebarMenu, setSidebarMenu] = useState<{threadKey: string, x: number, y: number} | null>(null)
+  const sidebarLongPressRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const togglePinThread = useCallback((key: string) => {
+    setPinnedThreadKeys(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      try { window.localStorage.setItem('eiat_wa_pinned_threads', JSON.stringify([...next])) } catch {}
+      return next
+    })
+    setSidebarMenu(null)
+  }, [])
   const sessionUnreadBaselineRef = useRef<Map<string, number>>(new Map())
   const lastFocusFetchAtRef = useRef(0)
   const chatScrollRef = useRef<HTMLDivElement>(null)
@@ -2298,8 +2318,15 @@ export function WhatsAppTool() {
     if (showUnreadOnly) {
       list = list.filter((x) => x.unread > 0)
     }
+    // Sort pinned threads to the top
+    list.sort((a, b) => {
+      const aPinned = pinnedThreadKeys.has(a.th.key) ? 1 : 0
+      const bPinned = pinnedThreadKeys.has(b.th.key) ? 1 : 0
+      if (aPinned !== bPinned) return bPinned - aPinned
+      return 0 // keep original order for same pin status
+    })
     return list
-  }, [filteredThreads, countIncomingUnread, readEpoch, showUnreadOnly])
+  }, [filteredThreads, countIncomingUnread, readEpoch, showUnreadOnly, pinnedThreadKeys])
 
   // While a thread is open, treat new incoming as read (WhatsApp-style).
   useEffect(() => {
@@ -4194,14 +4221,17 @@ export function WhatsAppTool() {
                       {showUnreadOnly ? 'عرض الكل' : 'غير مقروءة'}
                     </button>
                   </div>
-                  <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0}}>
-                    {threadRowsForList.map(({th, unread}) => (
+                  <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0, position: 'relative'}}>
+                    {threadRowsForList.map(({th, unread}) => {
+                      const isPinned = pinnedThreadKeys.has(th.key)
+                      return (
                       <button
                         key={th.key}
                         type="button"
                         className="wa-thread-item"
                         data-active={selectedThreadKey === th.key ? 'true' : 'false'}
                         onClick={() => {
+                          if (sidebarMenu) { setSidebarMenu(null); return }
                           startTransition(() => {
                             setSelectedThreadKey(th.key)
                             setChatQuickPhone('')
@@ -4209,13 +4239,32 @@ export function WhatsAppTool() {
                             setSelectedChatTpl(null)
                           })
                         }}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          setSidebarMenu({threadKey: th.key, x: e.clientX, y: e.clientY})
+                        }}
+                        onMouseDown={(e) => {
+                          sidebarLongPressRef.current = setTimeout(() => {
+                            setSidebarMenu({threadKey: th.key, x: e.clientX, y: e.clientY})
+                          }, 500)
+                        }}
+                        onMouseUp={() => clearTimeout(sidebarLongPressRef.current)}
+                        onMouseLeave={() => clearTimeout(sidebarLongPressRef.current)}
+                        onTouchStart={(e) => {
+                          const touch = e.touches[0]
+                          sidebarLongPressRef.current = setTimeout(() => {
+                            setSidebarMenu({threadKey: th.key, x: touch.clientX, y: touch.clientY})
+                          }, 500)
+                        }}
+                        onTouchEnd={() => clearTimeout(sidebarLongPressRef.current)}
+                        onTouchMove={() => clearTimeout(sidebarLongPressRef.current)}
                         style={{
                           width: '100%',
                           textAlign: 'right' as const,
                           padding: '12px 14px',
                           border: 'none',
-                          borderBottom: '1px solid var(--wa-border)',
-                          background: 'transparent',
+                          borderBottom: isPinned ? '1px solid rgba(37,211,102,0.25)' : '1px solid var(--wa-border)',
+                          background: isPinned ? 'rgba(37,211,102,0.06)' : 'transparent',
                           cursor: 'pointer',
                           color: 'var(--wa-text)',
                           fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
@@ -4239,7 +4288,7 @@ export function WhatsAppTool() {
                                 color: unread ? 'var(--wa-text)' : undefined,
                               }}
                             >
-                              {th.displayName}
+                              {isPinned && <span style={{marginLeft: '4px', fontSize: '12px'}}>📌</span>} {th.displayName}
                             </div>
                             <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
                               {th.sendPhone}
@@ -4287,7 +4336,54 @@ export function WhatsAppTool() {
                           })()}
                         </div>
                       </button>
-                    ))}
+                    )})
+                    }
+                    {/* Sidebar long-press context menu (Pin/Unpin) */}
+                    {sidebarMenu && (
+                      <>
+                        <div
+                          onClick={() => setSidebarMenu(null)}
+                          style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998}}
+                        />
+                        <div
+                          style={{
+                            position: 'fixed',
+                            top: Math.min(sidebarMenu.y, window.innerHeight - 60),
+                            left: Math.min(sidebarMenu.x, window.innerWidth - 160),
+                            zIndex: 999,
+                            background: 'var(--wa-surface)',
+                            border: '1px solid var(--wa-border)',
+                            borderRadius: '10px',
+                            boxShadow: '0 6px 24px rgba(0,0,0,0.25)',
+                            padding: '4px 0',
+                            minWidth: '140px',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            style={{
+                              width: '100%',
+                              padding: '10px 16px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--wa-text)',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              textAlign: 'right' as const,
+                              direction: 'rtl' as const,
+                              fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                              borderRadius: '8px',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(37,211,102,0.1)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            onClick={() => togglePinThread(sidebarMenu.threadKey)}
+                          >
+                            {pinnedThreadKeys.has(sidebarMenu.threadKey) ? '📌 إلغاء التثبيت' : '📌 تثبيت المحادثة'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
