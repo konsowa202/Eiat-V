@@ -123,6 +123,7 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
                   _type: "whatsappThread",
                   phoneNumber,
                   patientName: senderName,
+                  threadLabel: "جديد",
                   messages: [],
                 })
                 .set({ patientName: senderName, lastMessageAt: sentAt })

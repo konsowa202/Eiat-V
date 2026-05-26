@@ -302,6 +302,7 @@ interface ConversationDoc {
   errorMessage?: string
   messageKind?: string
   waMediaId?: string
+  threadLabel?: string
 }
 
 interface SavedContact {
@@ -318,6 +319,14 @@ interface WaThread {
   displayName: string
   messages: ConversationDoc[]
   lastAt: number
+  threadLabel?: string
+}
+
+interface WaLabel {
+  _id: string
+  name: string
+  color: string
+  order: number
 }
 
 function normalizePhone(p: string): string {
@@ -464,6 +473,7 @@ function buildThreads(list: ConversationDoc[]): WaThread[] {
       displayName,
       messages: msgs,
       lastAt: Math.max(...msgs.map((m) => new Date(m.sentAt).getTime())),
+      threadLabel: msgs[0]?.threadLabel,
     })
   }
   return out.sort((a, b) => b.lastAt - a.lastAt)
@@ -766,6 +776,10 @@ export function WhatsAppTool() {
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [scrollToMsgKey, setScrollToMsgKey] = useState<string | null>(null)
   const scrollToMsgKeyRef = useRef<string | null>(null)
+  // Label system
+  const [waLabels, setWaLabels] = useState<WaLabel[]>([])
+  const [activeLabelFilter, setActiveLabelFilter] = useState<string>('all')
+  const [changingLabel, setChangingLabel] = useState(false)
   const [chatQuickPhone, setChatQuickPhone] = useState('')
   const [sidebarNewChatPhone, setSidebarNewChatPhone] = useState('')
   const [creatingNewChat, setCreatingNewChat] = useState(false)
@@ -1025,7 +1039,7 @@ export function WhatsAppTool() {
     return client
       .fetch<any[]>(
         `*[_type == "whatsappThread"] | order(lastMessageAt desc)[0..99] {
-        _id, patientName, phoneNumber, lastMessageAt, messages
+        _id, patientName, phoneNumber, lastMessageAt, threadLabel, messages
       }`,
       )
       .then((d) => {
@@ -1045,7 +1059,8 @@ export function WhatsAppTool() {
               sentAt: msg.sentAt,
               errorMessage: msg.errorMessage,
               messageKind: msg.messageKind,
-              waMediaId: msg.waMediaId
+              waMediaId: msg.waMediaId,
+              threadLabel: thread.threadLabel,
             })
           }
         }
@@ -1150,6 +1165,10 @@ export function WhatsAppTool() {
 
   useEffect(() => {
     fetchConversations()
+    // Fetch labels
+    client.fetch<WaLabel[]>(
+      `*[_type == "whatsappLabel"] | order(order asc) { _id, name, color, order }`
+    ).then((labels) => setWaLabels(labels || [])).catch(() => {})
   }, [fetchConversations])
 
   // Play notification sound on new incoming message
@@ -2009,9 +2028,14 @@ export function WhatsAppTool() {
     // When search is active and has results, don't filter threads client-side
     // The search results panel handles navigation
     if (showSearchResults && searchResults.length > 0) return threads
+    let result = threads
+    // Label filter
+    if (activeLabelFilter !== 'all') {
+      result = result.filter((t) => (t.threadLabel || '') === activeLabelFilter)
+    }
     const q = searchLog.trim()
-    if (!q) return threads
-    return threads.filter(
+    if (!q) return result
+    return result.filter(
       (t) =>
         t.displayName.includes(q) ||
         t.sendPhone.replace(/\D/g, '').includes(q.replace(/\D/g, '')) ||
@@ -2022,7 +2046,7 @@ export function WhatsAppTool() {
             m.patientName?.includes(q),
         ),
     )
-  }, [threads, searchLog, showSearchResults, searchResults])
+  }, [threads, searchLog, showSearchResults, searchResults, activeLabelFilter])
 
   const activeThread = useMemo(
     () => threads.find((t) => t.key === selectedThreadKey) || null,
@@ -2554,6 +2578,26 @@ export function WhatsAppTool() {
     return () => clearTimeout(t)
   }, [selectedThreadKey, newestMsgId, tab, logTableMode, scrollToMsgKey])
 
+
+  const handleChangeThreadLabel = async (threadKey: string, newLabel: string) => {
+    setChangingLabel(true)
+    try {
+      // Find the thread to get its _id
+      const thread = threads.find(t => t.key === threadKey)
+      if (!thread || !thread.messages[0]) return
+      const threadId = thread.messages[0]._id
+      await client.patch(threadId).set({ threadLabel: newLabel }).commit()
+      // Update local state
+      setConversations(prev =>
+        prev.map(c => c._id === threadId ? { ...c, threadLabel: newLabel } : c)
+      )
+      showAlert('ok', `🏷️ تم تغيير التصنيف إلى "${newLabel}"`)
+    } catch {
+      showAlert('err', '❌ فشل تغيير التصنيف')
+    } finally {
+      setChangingLabel(false)
+    }
+  }
 
   const handleSearchBackend = async () => {
     const q = searchLog.trim()
@@ -4221,6 +4265,78 @@ export function WhatsAppTool() {
                       {showUnreadOnly ? 'عرض الكل' : 'غير مقروءة'}
                     </button>
                   </div>
+                  {/* Label filter tabs */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '4px',
+                    padding: '6px 10px',
+                    borderBottom: '1px solid var(--wa-border)',
+                    overflowX: 'auto' as const,
+                    flexShrink: 0,
+                    direction: 'rtl' as const,
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveLabelFilter('all')}
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        border: activeLabelFilter === 'all' ? '1px solid var(--wa-brand)' : '1px solid var(--wa-border)',
+                        background: activeLabelFilter === 'all' ? 'var(--wa-brand)' : 'transparent',
+                        color: activeLabelFilter === 'all' ? '#fff' : 'var(--wa-text)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontFamily: "'Segoe UI', Tajawal, sans-serif",
+                        whiteSpace: 'nowrap' as const,
+                        flexShrink: 0,
+                      }}
+                    >
+                      الكل
+                    </button>
+                    {/* Built-in "جديد" label */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveLabelFilter('جديد')}
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        border: activeLabelFilter === 'جديد' ? '1px solid #25d366' : '1px solid var(--wa-border)',
+                        background: activeLabelFilter === 'جديد' ? '#25d366' : 'transparent',
+                        color: activeLabelFilter === 'جديد' ? '#fff' : 'var(--wa-text)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontFamily: "'Segoe UI', Tajawal, sans-serif",
+                        whiteSpace: 'nowrap' as const,
+                        flexShrink: 0,
+                      }}
+                    >
+                      🆕 جديد
+                    </button>
+                    {waLabels.map((lb) => (
+                      <button
+                        key={lb._id}
+                        type="button"
+                        onClick={() => setActiveLabelFilter(lb.name)}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          border: activeLabelFilter === lb.name ? `1px solid ${lb.color}` : '1px solid var(--wa-border)',
+                          background: activeLabelFilter === lb.name ? lb.color : 'transparent',
+                          color: activeLabelFilter === lb.name ? '#fff' : 'var(--wa-text)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          fontFamily: "'Segoe UI', Tajawal, sans-serif",
+                          whiteSpace: 'nowrap' as const,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {lb.name}
+                      </button>
+                    ))}
+                  </div>
                   <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0, position: 'relative'}}>
                     {threadRowsForList.map(({th, unread}) => {
                       const isPinned = pinnedThreadKeys.has(th.key)
@@ -4293,6 +4409,33 @@ export function WhatsAppTool() {
                             <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
                               {th.sendPhone}
                             </div>
+                            {th.threadLabel && (
+                              <span style={{
+                                display: 'inline-block',
+                                marginTop: '2px',
+                                padding: '1px 6px',
+                                borderRadius: '8px',
+                                fontSize: '9px',
+                                fontWeight: 700,
+                                background: (() => {
+                                  if (th.threadLabel === 'جديد') return 'rgba(37,211,102,0.15)'
+                                  const lb = waLabels.find(l => l.name === th.threadLabel)
+                                  return lb ? `${lb.color}22` : 'rgba(107,114,128,0.15)'
+                                })(),
+                                color: (() => {
+                                  if (th.threadLabel === 'جديد') return '#25d366'
+                                  const lb = waLabels.find(l => l.name === th.threadLabel)
+                                  return lb ? lb.color : '#6b7280'
+                                })(),
+                                border: (() => {
+                                  if (th.threadLabel === 'جديد') return '1px solid rgba(37,211,102,0.3)'
+                                  const lb = waLabels.find(l => l.name === th.threadLabel)
+                                  return lb ? `1px solid ${lb.color}44` : '1px solid rgba(107,114,128,0.3)'
+                                })(),
+                              }}>
+                                {th.threadLabel}
+                              </span>
+                            )}
                           </div>
                           {unread > 0 ? (
                             <span
@@ -4381,6 +4524,32 @@ export function WhatsAppTool() {
                           >
                             {pinnedThreadKeys.has(sidebarMenu.threadKey) ? '📌 إلغاء التثبيت' : '📌 تثبيت المحادثة'}
                           </button>
+                          <div style={{borderTop: '1px solid var(--wa-border)', margin: '2px 0'}} />
+                          <div style={{padding: '4px 12px', fontSize: '10px', color: 'var(--wa-muted)', direction: 'rtl' as const, fontWeight: 700}}>🏷️ تصنيف</div>
+                          {['جديد', ...waLabels.map(l => l.name)].map(lbl => (
+                            <button
+                              key={lbl}
+                              type="button"
+                              style={{
+                                width: '100%',
+                                padding: '7px 16px',
+                                border: 'none',
+                                background: 'transparent',
+                                color: 'var(--wa-text)',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                textAlign: 'right' as const,
+                                direction: 'rtl' as const,
+                                fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(37,211,102,0.1)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                              onClick={() => { void handleChangeThreadLabel(sidebarMenu.threadKey, lbl); setSidebarMenu(null) }}
+                            >
+                              {lbl === 'جديد' ? '🆕' : '•'} {lbl}
+                            </button>
+                          ))}
                         </div>
                       </>
                     )}
@@ -4456,9 +4625,42 @@ export function WhatsAppTool() {
                           color: 'var(--wa-muted)',
                           direction: 'ltr' as const,
                           marginTop: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          flexWrap: 'wrap' as const,
                         }}
                       >
-                        {effectiveActiveThread.sendPhone}
+                        <span>{effectiveActiveThread.sendPhone}</span>
+                        {activeThread && (
+                          <select
+                            value={effectiveActiveThread.threadLabel || ''}
+                            onChange={(e) => {
+                              if (e.target.value && effectiveActiveThread) {
+                                void handleChangeThreadLabel(effectiveActiveThread.key, e.target.value)
+                              }
+                            }}
+                            disabled={changingLabel}
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--wa-border)',
+                              background: 'var(--wa-surface)',
+                              color: 'var(--wa-text)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              fontFamily: "'Segoe UI', Tajawal, sans-serif",
+                              direction: 'rtl' as const,
+                            }}
+                          >
+                            <option value="">بدون تصنيف</option>
+                            <option value="جديد">🆕 جديد</option>
+                            {waLabels.map(lb => (
+                              <option key={lb._id} value={lb.name}>{lb.name}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     </div>
                     {/* Long-press context menu */}

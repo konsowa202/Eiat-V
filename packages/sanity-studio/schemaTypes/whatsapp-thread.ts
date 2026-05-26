@@ -35,6 +35,12 @@ export default defineType({
       type: 'datetime',
     }),
     defineField({
+      name: 'threadLabel',
+      title: 'التصنيف',
+      type: 'string',
+      initialValue: 'جديد',
+    }),
+    defineField({
       name: 'messages',
       title: 'الرسائل',
       type: 'array',
