@@ -4268,63 +4268,53 @@ export function WhatsAppTool() {
                   {/* Label filter tabs */}
                   <div style={{
                     display: 'flex',
-                    gap: '4px',
-                    padding: '6px 10px',
+                    alignItems: 'center',
                     borderBottom: '1px solid var(--wa-border)',
-                    overflowX: 'auto' as const,
                     flexShrink: 0,
                     direction: 'rtl' as const,
                   }}>
+                    {/* Fixed "الكل" button always visible */}
                     <button
                       type="button"
                       onClick={() => setActiveLabelFilter('all')}
                       style={{
-                        padding: '3px 10px',
+                        padding: '4px 12px',
                         borderRadius: '12px',
                         border: activeLabelFilter === 'all' ? '1px solid var(--wa-brand)' : '1px solid var(--wa-border)',
                         background: activeLabelFilter === 'all' ? 'var(--wa-brand)' : 'transparent',
                         color: activeLabelFilter === 'all' ? '#fff' : 'var(--wa-text)',
                         fontSize: '11px',
-                        fontWeight: 600,
+                        fontWeight: 700,
                         cursor: 'pointer',
                         fontFamily: "'Segoe UI', Tajawal, sans-serif",
                         whiteSpace: 'nowrap' as const,
                         flexShrink: 0,
+                        marginRight: '8px',
+                        marginLeft: '4px',
                       }}
                     >
-                      الكل
+                      الكل ({threads.length})
                     </button>
-                    {/* Built-in "جديد" label */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabelFilter('جديد')}
-                      style={{
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        border: activeLabelFilter === 'جديد' ? '1px solid #25d366' : '1px solid var(--wa-border)',
-                        background: activeLabelFilter === 'جديد' ? '#25d366' : 'transparent',
-                        color: activeLabelFilter === 'جديد' ? '#fff' : 'var(--wa-text)',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontFamily: "'Segoe UI', Tajawal, sans-serif",
-                        whiteSpace: 'nowrap' as const,
-                        flexShrink: 0,
-                      }}
-                    >
-                      🆕 جديد
-                    </button>
-                    {waLabels.map((lb) => (
+                    {/* Scrollable labels */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '4px',
+                      padding: '6px 6px 6px 10px',
+                      overflowX: 'auto' as const,
+                      flex: 1,
+                      minWidth: 0,
+                      scrollbarWidth: 'none' as const,
+                    }}>
+                      {/* Built-in "جديد" label */}
                       <button
-                        key={lb._id}
                         type="button"
-                        onClick={() => setActiveLabelFilter(lb.name)}
+                        onClick={() => setActiveLabelFilter(activeLabelFilter === 'جديد' ? 'all' : 'جديد')}
                         style={{
                           padding: '3px 10px',
                           borderRadius: '12px',
-                          border: activeLabelFilter === lb.name ? `1px solid ${lb.color}` : '1px solid var(--wa-border)',
-                          background: activeLabelFilter === lb.name ? lb.color : 'transparent',
-                          color: activeLabelFilter === lb.name ? '#fff' : 'var(--wa-text)',
+                          border: activeLabelFilter === 'جديد' ? '1px solid #25d366' : '1px solid var(--wa-border)',
+                          background: activeLabelFilter === 'جديد' ? '#25d366' : 'transparent',
+                          color: activeLabelFilter === 'جديد' ? '#fff' : 'var(--wa-text)',
                           fontSize: '11px',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -4333,9 +4323,31 @@ export function WhatsAppTool() {
                           flexShrink: 0,
                         }}
                       >
-                        {lb.name}
+                        🆕 جديد
                       </button>
-                    ))}
+                      {waLabels.map((lb) => (
+                        <button
+                          key={lb._id}
+                          type="button"
+                          onClick={() => setActiveLabelFilter(activeLabelFilter === lb.name ? 'all' : lb.name)}
+                          style={{
+                            padding: '3px 10px',
+                            borderRadius: '12px',
+                            border: activeLabelFilter === lb.name ? `1px solid ${lb.color}` : '1px solid var(--wa-border)',
+                            background: activeLabelFilter === lb.name ? lb.color : 'transparent',
+                            color: activeLabelFilter === lb.name ? '#fff' : 'var(--wa-text)',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            fontFamily: "'Segoe UI', Tajawal, sans-serif",
+                            whiteSpace: 'nowrap' as const,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {lb.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0, position: 'relative'}}>
                     {threadRowsForList.map(({th, unread}) => {
