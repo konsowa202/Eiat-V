@@ -50,6 +50,7 @@ export default defineConfig({
                     S.documentTypeListItem('whatsappTemplate').title('📋 قوالب الرسائل'),
                     S.documentTypeListItem('whatsappThread').title('💬 سجل المحادثات'),
                     S.documentTypeListItem('whatsappContact').title('👤 جهات الاتصال'),
+                    S.documentTypeListItem('whatsappLabel').title('🏷️ تصنيفات المحادثات'),
                   ])
               ),
           ]),
