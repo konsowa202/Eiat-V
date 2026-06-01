@@ -46,6 +46,7 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
             location?: { latitude?: number; longitude?: number };
             button?: { text?: string };
             interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
+            context?: { from?: string; id?: string };
           };
 
           const contacts = value.contacts as { wa_id?: string; profile?: { name?: string } }[] | undefined;
