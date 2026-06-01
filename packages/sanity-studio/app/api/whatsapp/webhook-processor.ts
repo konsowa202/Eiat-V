@@ -118,28 +118,32 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
 
             await withSanityWriteClient((client) =>
               client
-                .patch(threadId)
-                .setIfMissing({
+                .transaction()
+                .createIfNotExists({
+                  _id: threadId,
                   _type: "whatsappThread",
                   phoneNumber,
                   patientName: senderName,
                   threadLabel: "جديد",
                   messages: [],
                 })
-                .set({ patientName: senderName, lastMessageAt: sentAt })
-                .append("messages", [
-                  {
-                    _key: randomUUID(),
-                    messageBody,
-                    direction: "incoming",
-                    status: "sent",
-                    messageKind,
-                    ...(waMediaId ? { waMediaId } : {}),
-                    templateUsed: "رسالة واردة",
-                    wamid: msg.id,
-                    sentAt,
-                  },
-                ])
+                .patch(threadId, (p) =>
+                  p
+                    .set({ patientName: senderName, lastMessageAt: sentAt })
+                    .append("messages", [
+                      {
+                        _key: randomUUID(),
+                        messageBody,
+                        direction: "incoming",
+                        status: "sent",
+                        messageKind,
+                        ...(waMediaId ? { waMediaId } : {}),
+                        templateUsed: "رسالة واردة",
+                        wamid: msg.id,
+                        sentAt,
+                      },
+                    ])
+                )
                 .commit({ autoGenerateArrayKeys: true })
             );
             incomingUpserts += 1;

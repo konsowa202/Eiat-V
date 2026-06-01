@@ -860,6 +860,8 @@ export function WhatsAppTool() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioPartsRef = useRef<Blob[]>([])
+  const labelScrollRef = useRef<HTMLDivElement>(null)
+  const labelDragState = useRef<{dragging: boolean, startX: number, scrollLeft: number}>({dragging: false, startX: 0, scrollLeft: 0})
   const audioMimeTypeRef = useRef('audio/ogg')
   const lastIncomingMsgAtRef = useRef<number>(0)
 
@@ -4296,15 +4298,52 @@ export function WhatsAppTool() {
                       الكل ({threads.length})
                     </button>
                     {/* Scrollable labels */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '4px',
-                      padding: '6px 6px 6px 10px',
-                      overflowX: 'auto' as const,
-                      flex: 1,
-                      minWidth: 0,
-                      scrollbarWidth: 'none' as const,
-                    }}>
+                    <div
+                      ref={labelScrollRef}
+                      onMouseDown={(e) => {
+                        const el = labelScrollRef.current
+                        if (!el) return
+                        labelDragState.current = {dragging: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft}
+                        el.style.cursor = 'grabbing'
+                      }}
+                      onMouseMove={(e) => {
+                        if (!labelDragState.current.dragging) return
+                        e.preventDefault()
+                        const el = labelScrollRef.current
+                        if (!el) return
+                        const x = e.pageX - el.offsetLeft
+                        const walk = (x - labelDragState.current.startX) * 1.5
+                        el.scrollLeft = labelDragState.current.scrollLeft - walk
+                      }}
+                      onMouseUp={() => { labelDragState.current.dragging = false; if (labelScrollRef.current) labelScrollRef.current.style.cursor = 'grab' }}
+                      onMouseLeave={() => { labelDragState.current.dragging = false; if (labelScrollRef.current) labelScrollRef.current.style.cursor = 'grab' }}
+                      onTouchStart={(e) => {
+                        const el = labelScrollRef.current
+                        if (!el) return
+                        const touch = e.touches[0]
+                        labelDragState.current = {dragging: true, startX: touch.pageX - el.offsetLeft, scrollLeft: el.scrollLeft}
+                      }}
+                      onTouchMove={(e) => {
+                        if (!labelDragState.current.dragging) return
+                        const el = labelScrollRef.current
+                        if (!el) return
+                        const touch = e.touches[0]
+                        const x = touch.pageX - el.offsetLeft
+                        const walk = (x - labelDragState.current.startX) * 1.5
+                        el.scrollLeft = labelDragState.current.scrollLeft - walk
+                      }}
+                      onTouchEnd={() => { labelDragState.current.dragging = false }}
+                      style={{
+                        display: 'flex',
+                        gap: '4px',
+                        padding: '6px 6px 6px 10px',
+                        overflowX: 'auto' as const,
+                        flex: 1,
+                        minWidth: 0,
+                        scrollbarWidth: 'none' as const,
+                        cursor: 'grab',
+                        userSelect: 'none' as const,
+                      }}>
                       {/* Built-in "جديد" label */}
                       <button
                         type="button"

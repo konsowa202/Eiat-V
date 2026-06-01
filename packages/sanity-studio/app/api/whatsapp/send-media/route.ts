@@ -178,24 +178,30 @@ export async function POST(req: NextRequest) {
         const phoneDigits = num;
         const threadId = `whatsappThread.${phoneDigits}`;
         const sentAtStr = new Date().toISOString();
-        return client.patch(threadId)
-          .setIfMissing({
+        return client
+          .transaction()
+          .createIfNotExists({
+            _id: threadId,
             _type: "whatsappThread",
             phoneNumber: `+${num}`,
             patientName,
+            threadLabel: "جديد",
             messages: [],
           })
-          .set({ patientName, lastMessageAt: sentAtStr })
-          .append("messages", [{
-            _key: Math.random().toString(36).substring(2, 15),
-            messageBody: caption || `[${kind}]`,
-            direction: "outgoing",
-            status: "failed",
-            messageKind: kind,
-            templateUsed,
-            sentAt: sentAtStr,
-            errorMessage: `[${errCode}] ${errMsg}`,
-          }])
+          .patch(threadId, (p) =>
+            p
+              .set({ patientName, lastMessageAt: sentAtStr })
+              .append("messages", [{
+                _key: Math.random().toString(36).substring(2, 15),
+                messageBody: caption || `[${kind}]`,
+                direction: "outgoing",
+                status: "failed",
+                messageKind: kind,
+                templateUsed,
+                sentAt: sentAtStr,
+                errorMessage: `[${errCode}] ${errMsg}`,
+              }])
+          )
           .commit({ autoGenerateArrayKeys: true });
       });
       return jsonCors(
@@ -306,25 +312,31 @@ export async function POST(req: NextRequest) {
       const errMsg = waData?.error?.message || `HTTP ${waRes.status}`;
       const errCode = waData?.error?.code || "";
       await withSanityWriteClient((client) =>
-        client.patch(`whatsappThread.${num}`)
-          .setIfMissing({
+        client
+          .transaction()
+          .createIfNotExists({
+            _id: `whatsappThread.${num}`,
             _type: "whatsappThread",
             phoneNumber: `+${num}`,
             patientName,
+            threadLabel: "جديد",
             messages: [],
           })
-          .set({ patientName, lastMessageAt: new Date().toISOString() })
-          .append("messages", [{
-            _key: Math.random().toString(36).substring(2, 15),
-            messageBody: caption || `[${kind}]`,
-            direction: "outgoing",
-            status: "failed",
-            messageKind: kind,
-            waMediaId: mediaId,
-            templateUsed,
-            sentAt: new Date().toISOString(),
-            errorMessage: `[${errCode}] ${errMsg}`,
-          }])
+          .patch(`whatsappThread.${num}`, (p) =>
+            p
+              .set({ patientName, lastMessageAt: new Date().toISOString() })
+              .append("messages", [{
+                _key: Math.random().toString(36).substring(2, 15),
+                messageBody: caption || `[${kind}]`,
+                direction: "outgoing",
+                status: "failed",
+                messageKind: kind,
+                waMediaId: mediaId,
+                templateUsed,
+                sentAt: new Date().toISOString(),
+                errorMessage: `[${errCode}] ${errMsg}`,
+              }])
+          )
           .commit({ autoGenerateArrayKeys: true }),
       );
       return jsonCors(
@@ -336,25 +348,31 @@ export async function POST(req: NextRequest) {
     const wamid = waData?.messages?.[0]?.id || "";
 
     await withSanityWriteClient((client) =>
-      client.patch(`whatsappThread.${num}`)
-        .setIfMissing({
+      client
+        .transaction()
+        .createIfNotExists({
+          _id: `whatsappThread.${num}`,
           _type: "whatsappThread",
           phoneNumber: `+${num}`,
           patientName,
+          threadLabel: "جديد",
           messages: [],
         })
-        .set({ patientName, lastMessageAt: new Date().toISOString() })
-        .append("messages", [{
-          _key: Math.random().toString(36).substring(2, 15),
-          messageBody: caption || `[${kind}]`,
-          direction: "outgoing",
-          status: "sent",
-          messageKind: kind,
-          waMediaId: mediaId,
-          templateUsed,
-          wamid,
-          sentAt: new Date().toISOString(),
-        }])
+        .patch(`whatsappThread.${num}`, (p) =>
+          p
+            .set({ patientName, lastMessageAt: new Date().toISOString() })
+            .append("messages", [{
+              _key: Math.random().toString(36).substring(2, 15),
+              messageBody: caption || `[${kind}]`,
+              direction: "outgoing",
+              status: "sent",
+              messageKind: kind,
+              waMediaId: mediaId,
+              templateUsed,
+              wamid,
+              sentAt: new Date().toISOString(),
+            }])
+        )
         .commit({ autoGenerateArrayKeys: true }),
     );
 

@@ -525,32 +525,37 @@ export async function POST(req: NextRequest) {
         const sentAtStr = new Date().toISOString();
         
         await sanity
-          .patch(threadId)
-          .setIfMissing({
+          .transaction()
+          .createIfNotExists({
+            _id: threadId,
             _type: "whatsappThread",
             phoneNumber: phoneE164,
             patientName: resolvedPatientName,
+            threadLabel: "جديد",
             messages: [],
           })
-          .set({ patientName: resolvedPatientName, lastMessageAt: sentAtStr })
-          .append("messages", [
-            {
-              _key: Math.random().toString(36).substring(2, 15),
-              messageBody: outgoingBody,
-              status: graphOk ? "sent" : "failed",
-              templateUsed: metaTemplate?.name?.trim()
-                ? graphTemplateName
-                : config
-                  ? config.name
-                  : templateUsed || "رسالة مخصصة",
-              direction: "outgoing",
-              messageKind: "text",
-              sentAt: sentAtStr,
-              ...(graphOk && wamid ? {wamid} : {}),
-              ...(!graphOk && graphErrLine ? {errorMessage: graphErrLine} : {}),
-              notes: JSON.stringify({ version: "3.3", payload, waData, graphOk, graphErrLine }),
-            }
-          ])
+          .patch(threadId, (p) =>
+            p
+              .set({ patientName: resolvedPatientName, lastMessageAt: sentAtStr })
+              .append("messages", [
+                {
+                  _key: Math.random().toString(36).substring(2, 15),
+                  messageBody: outgoingBody,
+                  status: graphOk ? "sent" : "failed",
+                  templateUsed: metaTemplate?.name?.trim()
+                    ? graphTemplateName
+                    : config
+                      ? config.name
+                      : templateUsed || "رسالة مخصصة",
+                  direction: "outgoing",
+                  messageKind: "text",
+                  sentAt: sentAtStr,
+                  ...(graphOk && wamid ? {wamid} : {}),
+                  ...(!graphOk && graphErrLine ? {errorMessage: graphErrLine} : {}),
+                  notes: JSON.stringify({ version: "3.3", payload, waData, graphOk, graphErrLine }),
+                }
+              ])
+          )
           .commit({ autoGenerateArrayKeys: true });
       } catch (persistErr: unknown) {
         const raw = persistErr instanceof Error ? persistErr.message : String(persistErr);
