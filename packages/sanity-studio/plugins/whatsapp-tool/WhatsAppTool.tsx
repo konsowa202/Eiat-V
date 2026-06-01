@@ -303,6 +303,7 @@ interface ConversationDoc {
   messageKind?: string
   waMediaId?: string
   threadLabel?: string
+  replyToWamid?: string
 }
 
 interface SavedContact {
@@ -1062,6 +1063,7 @@ export function WhatsAppTool() {
               errorMessage: msg.errorMessage,
               messageKind: msg.messageKind,
               waMediaId: msg.waMediaId,
+              replyToWamid: msg.replyToWamid,
               threadLabel: thread.threadLabel,
             })
           }
@@ -4883,6 +4885,59 @@ export function WhatsAppTool() {
                                   transition: 'background 0.18s, border-color 0.18s',
                                 }}
                               >
+                                {/* Reply / quoted message */}
+                                {c.replyToWamid && (() => {
+                                  const quotedMsg = effectiveActiveThread.messages.find(m => m.wamid === c.replyToWamid)
+                                  if (!quotedMsg) return null
+                                  const qOut = quotedMsg.direction === 'outgoing'
+                                  const qBody = (quotedMsg.messageBody || '').trim()
+                                  const qPreview = qBody.length > 120 ? qBody.slice(0, 120) + '…' : qBody
+                                  const qKind = quotedMsg.messageKind || 'text'
+                                  const barColor = qOut ? '#25d366' : '#8696a0'
+                                  return (
+                                    <div
+                                      style={{
+                                        background: out ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.06)',
+                                        borderRadius: '6px',
+                                        padding: '6px 10px 6px 10px',
+                                        marginBottom: '6px',
+                                        borderRight: `3px solid ${barColor}`,
+                                        cursor: 'pointer',
+                                        direction: 'rtl' as const,
+                                      }}
+                                      onClick={() => {
+                                        const el = document.querySelector(`[data-msg-key="${quotedMsg._key || ''}"]`)
+                                        if (el) {
+                                          el.scrollIntoView({behavior: 'smooth', block: 'center'})
+                                          ;(el as HTMLElement).style.background = 'rgba(37,211,102,0.15)'
+                                          setTimeout(() => { (el as HTMLElement).style.background = '' }, 1500)
+                                        }
+                                      }}
+                                    >
+                                      <div style={{fontSize: '11px', fontWeight: 700, color: barColor, marginBottom: '2px'}}>
+                                        {qOut ? 'أنت' : (effectiveActiveThread.displayName || 'العميل')}
+                                      </div>
+                                      {qKind === 'image' && <div style={{fontSize: '11px', opacity: 0.7}}>📷 صورة</div>}
+                                      {qKind === 'video' && <div style={{fontSize: '11px', opacity: 0.7}}>🎥 فيديو</div>}
+                                      {qKind === 'audio' && <div style={{fontSize: '11px', opacity: 0.7}}>🎤 رسالة صوتية</div>}
+                                      {qKind === 'document' && <div style={{fontSize: '11px', opacity: 0.7}}>📄 مستند</div>}
+                                      {qKind === 'sticker' && <div style={{fontSize: '11px', opacity: 0.7}}>🏷️ ملصق</div>}
+                                      {qPreview && (
+                                        <div style={{
+                                          fontSize: '12px',
+                                          opacity: 0.8,
+                                          whiteSpace: 'pre-wrap' as const,
+                                          wordBreak: 'break-word' as const,
+                                          lineHeight: '1.3',
+                                          maxHeight: '3.9em',
+                                          overflow: 'hidden',
+                                        }}>
+                                          {qPreview}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })()}
                                 {c.waMediaId && kind === 'image' && (
                                   <img
                                     src={src}

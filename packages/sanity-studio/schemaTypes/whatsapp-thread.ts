@@ -68,6 +68,7 @@ export default defineType({
             { name: 'wamid', title: 'Wamid', type: 'string' },
             { name: 'errorMessage', title: 'خطأ', type: 'string' },
             { name: 'sentAt', title: 'وقت الإرسال', type: 'datetime' },
+            { name: 'replyToWamid', title: 'رد على رسالة', type: 'string' },
           ],
           preview: {
             select: {

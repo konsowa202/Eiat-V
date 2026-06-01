@@ -138,6 +138,7 @@ export async function processWhatsAppBusinessWebhookPayload(body: unknown): Prom
                         status: "sent",
                         messageKind,
                         ...(waMediaId ? { waMediaId } : {}),
+                        ...(msg.context?.id ? { replyToWamid: msg.context.id } : {}),
                         templateUsed: "رسالة واردة",
                         wamid: msg.id,
                         sentAt,
