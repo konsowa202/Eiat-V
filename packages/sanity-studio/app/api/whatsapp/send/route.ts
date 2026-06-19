@@ -302,6 +302,7 @@ export async function POST(req: NextRequest) {
       templateUsed,
       templateParams,
       metaTemplate,
+      skipSanityLog,
     }: {
       phone?: string;
       message?: string;

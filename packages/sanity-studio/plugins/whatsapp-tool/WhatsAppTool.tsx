@@ -1431,10 +1431,10 @@ export function WhatsAppTool() {
             metaTemplate
           }),
         });
-        const batchData = await parseApiResponse(res);
-        if (batchData.success && batchData.results) {
+        const batchData = await parseApiResponse(res) as any;
+        if (batchData.success && Array.isArray(batchData.results)) {
           // Update local targets state
-          const resultsMap = new Map(batchData.results.map((r: any) => [r.phone, r]));
+          const resultsMap = new Map<string, any>(batchData.results.map((r: any) => [r.phone, r]));
           setBroadcastTargets(prev => prev.map(t => {
             const r = resultsMap.get(t.phone);
             if (r) {
