@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < targets.length; i++) {
       const c = targets[i];
-      let rowResult = { phone: c.phoneE164, name: c.name || "العميل الكريم", status: "failed", error: "", wamid: "" };
+      const rowResult = { phone: c.phoneE164, name: c.name || "العميل الكريم", status: "failed", error: "", wamid: "" };
       try {
         const res = await fetch(sendUrl, {
           method: "POST",
