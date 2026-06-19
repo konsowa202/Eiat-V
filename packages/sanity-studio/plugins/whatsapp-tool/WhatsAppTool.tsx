@@ -4090,7 +4090,7 @@ export function WhatsAppTool() {
                 boxShadow: 'var(--wa-card-shadow)',
               }}
             >
-              {/* عمود القوائم: فريم جهات الاتصال (أعلى) وفريم آخر المحادثات (أسفل) — منفصلان بوضوح */}
+              {/* عمود القوائم: فريم آخر المحادثات (أعلى) وفريم جهات الاتصال (أسفل) — منفصلان بوضوح */}
               <div
                 style={{
                   width: 'min(280px, 30%)',
@@ -4166,66 +4166,6 @@ export function WhatsAppTool() {
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    border: '1px solid var(--wa-border)',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    background: 'var(--wa-surface)',
-                    display: 'flex',
-                    flexDirection: 'column' as const,
-                    minHeight: 0,
-                    flex: '0 1 auto',
-                    maxHeight: '38vh',
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: '10px 12px',
-                      borderBottom: '1px solid var(--wa-border)',
-                      fontSize: '12px',
-                      color: 'var(--wa-muted)',
-                      background: 'var(--wa-surface-2)',
-                      fontWeight: 700,
-                    }}
-                  >
-                    👤 جهات الاتصال المحفوظة ({activeContactsCount}) {loadingSavedContacts ? '…' : ''}
-                  </div>
-                  <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)', flexShrink: 0}}>
-                    <input
-                      style={{...S.input, marginBottom: 0}}
-                      placeholder="بحث في الجهات بالاسم أو الرقم..."
-                      value={contactsSearch}
-                      onChange={(e) => setContactsSearch(e.target.value)}
-                    />
-                  </div>
-                  <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0}}>
-                    {savedContacts.map((c) => (
-                      <button
-                        key={c._id}
-                        type="button"
-                        className="wa-thread-item"
-                        onClick={() => openSavedContact(c)}
-                        style={{
-                          width: '100%',
-                          textAlign: 'right' as const,
-                          padding: '10px 14px',
-                          border: 'none',
-                          borderBottom: '1px dashed var(--wa-border)',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          color: 'var(--wa-text)',
-                          fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
-                        }}
-                      >
-                        <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
-                        <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
-                          {c.phoneE164}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
                 <div
                   style={{
@@ -4606,6 +4546,67 @@ export function WhatsAppTool() {
                         </div>
                       </>
                     )}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: '1px solid var(--wa-border)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    background: 'var(--wa-surface)',
+                    display: 'flex',
+                    flexDirection: 'column' as const,
+                    minHeight: 0,
+                    flex: '0 1 auto',
+                    maxHeight: '30vh',
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderBottom: '1px solid var(--wa-border)',
+                      fontSize: '12px',
+                      color: 'var(--wa-muted)',
+                      background: 'var(--wa-surface-2)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    👤 جهات الاتصال المحفوظة ({activeContactsCount}) {loadingSavedContacts ? '…' : ''}
+                  </div>
+                  <div style={{padding: '8px 12px', borderBottom: '1px solid var(--wa-border)', flexShrink: 0}}>
+                    <input
+                      style={{...S.input, marginBottom: 0}}
+                      placeholder="بحث في الجهات بالاسم أو الرقم..."
+                      value={contactsSearch}
+                      onChange={(e) => setContactsSearch(e.target.value)}
+                    />
+                  </div>
+                  <div style={{overflowY: 'auto' as const, flex: 1, minHeight: 0}}>
+                    {savedContacts.map((c) => (
+                      <button
+                        key={c._id}
+                        type="button"
+                        className="wa-thread-item"
+                        onClick={() => openSavedContact(c)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'right' as const,
+                          padding: '10px 14px',
+                          border: 'none',
+                          borderBottom: '1px dashed var(--wa-border)',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          color: 'var(--wa-text)',
+                          fontFamily: "'Segoe UI',system-ui,Tajawal,sans-serif",
+                        }}
+                      >
+                        <div style={{fontWeight: 700, fontSize: '13px'}}>{(c.name || '').trim() || 'بدون اسم'}</div>
+                        <div style={{fontSize: '11px', color: 'var(--wa-muted)', direction: 'ltr' as const}}>
+                          {c.phoneE164}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
