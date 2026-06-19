@@ -9,6 +9,7 @@ import whatsappTemplate from './whatsapp-template'
 import whatsappContact from './whatsapp-contact'
 import whatsappThread from './whatsapp-thread'
 import whatsappLabel from './whatsapp-label'
+import whatsappBroadcast from './whatsapp-broadcast'
 import beforeAfter from './before-after'
 
 export const schemaTypes = [
@@ -23,5 +24,6 @@ export const schemaTypes = [
   whatsappContact,
   whatsappThread,
   whatsappLabel,
+  whatsappBroadcast,
   beforeAfter,
 ]

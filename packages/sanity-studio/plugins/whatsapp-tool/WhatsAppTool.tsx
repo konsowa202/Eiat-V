@@ -787,6 +787,11 @@ export function WhatsAppTool() {
   const [logTableMode, setLogTableMode] = useState(false)
   const [broadcastMode, setBroadcastMode] = useState(false)
   const [sendBroadcastMode, setSendBroadcastMode] = useState(false)
+
+  const [broadcastTargets, setBroadcastTargets] = useState<BroadcastTarget[]>([])
+  const [manualPhone, setManualPhone] = useState('')
+  const [manualName, setManualName] = useState('')
+
   const [sendBroadcastNumbersRaw, setSendBroadcastNumbersRaw] = useState('')
   const [sendFromSavedContacts, setSendFromSavedContacts] = useState(false)
   const [contactsBatchSize, setContactsBatchSize] = useState(50)
@@ -1371,27 +1376,20 @@ export function WhatsAppTool() {
       return
     }
 
-    const manualTargets = extractBroadcastTargets(sendBroadcastNumbersRaw)
-    const historyTargets: BroadcastTarget[] = threads.map((t) => ({
-      phone: t.sendPhone,
-      name: t.displayName,
-    }))
-    const singleTarget: BroadcastTarget[] = phone.trim()
-      ? [{phone: normalizePhone(phone.trim()), ...(patientName.trim() ? {name: patientName.trim()} : {})}]
-      : []
-    const targets = sendBroadcastMode
-      ? Array.from(
-          new Map(
-            [...historyTargets, ...manualTargets].map((t) => [t.phone, t]),
-          ).values(),
-        )
-      : singleTarget
+    let targets: BroadcastTarget[] = [];
+    if (sendBroadcastMode) {
+      targets = broadcastTargets;
+    } else {
+      targets = phone.trim()
+        ? [{phone: normalizePhone(phone.trim()), name: patientName.trim() || 'عميل غير معروف'}]
+        : [];
+    }
 
     if (!targets.length) {
       return showAlert(
         'err',
         sendBroadcastMode
-          ? '⚠️ أدخل أرقامًا للبث أو تأكد من وجود أرقام في الهيستوري'
+          ? '⚠️ القائمة فارغة، أضف أرقاماً للإرسال'
           : '⚠️ أدخل رقم الواتساب',
       )
     }
@@ -1400,52 +1398,133 @@ export function WhatsAppTool() {
     setAlert(null)
 
     try {
-      let ok = 0
-      let fail = 0
-      for (const t of targets) {
-        // Build raw params for the backend to use with Meta Templates
-        const templateParams = {
-          patientName: t.name || patientName || 'عميلنا العزيز',
-          appointmentDate: appointmentDate,
-          doctorName: doctorName,
-          location: 'حي الأندلس، جدة', // Default
-        }
+      if (sendBroadcastMode) {
+        // 1. Send Batch
+        const metaTemplate = selectedMetaTpl
+              ? {
+                  name: selectedMetaTpl.name,
+                  languageCode: selectedMetaTpl.language,
+                  bodyParameterValues:
+                    selectedMetaTpl.bodyVariableCount > 0
+                      ? [
+                          patientName || 'عميلنا العزيز',
+                          appointmentDate,
+                          doctorName,
+                          'حي الأندلس، جدة',
+                        ].slice(0, selectedMetaTpl.bodyVariableCount)
+                      : [],
+                }
+              : undefined;
 
-        const res = await fetch(waApiAbs('/api/whatsapp/send'), {
+        const res = await fetch(waApiAbs('/api/whatsapp/send-excel-batch'), {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
-            phone: t.phone,
-            message: text,
-            patientName: t.name || patientName || 'غير محدد',
-            templateUsed: sendBroadcastMode
-              ? `Broadcast · ${selectedTpl?.name || 'رسالة مخصصة'}`
-              : selectedTpl?.name || 'رسالة مخصصة',
-            templateParams, // Pass actual data fields to the backend
+            targets: targets.map(t => ({ phoneE164: t.phone, name: t.name })),
+            message: customMsg,
+            templateUsed: selectedTpl ? selectedTpl.name : 'رسالة مخصصة',
+            templateParams: {
+              appointmentDate,
+              doctorName,
+              location: 'حي الأندلس، جدة'
+            },
+            metaTemplate
           }),
-        })
-        const data = await parseApiResponse(res)
-        if (data.success) ok += 1
-        else fail += 1
-        if (sendBroadcastMode) await new Promise((r) => setTimeout(r, 120))
-      }
+        });
+        const batchData = await parseApiResponse(res);
+        if (batchData.success && batchData.results) {
+          // Update local targets state
+          const resultsMap = new Map(batchData.results.map((r: any) => [r.phone, r]));
+          setBroadcastTargets(prev => prev.map(t => {
+            const r = resultsMap.get(t.phone);
+            if (r) {
+              return { ...t, status: r.status, error: r.error, wamid: r.wamid };
+            }
+            return t;
+          }));
 
-      if (sendBroadcastMode) {
-        showAlert('ok', `📣 الإرسال الجماعي تم: ✅ ${ok} / ❌ ${fail}`)
-      } else if (fail > 0) {
-        showAlert('err', '❌ فشل الإرسال')
+          // 2. Save Broadcast Document
+          try {
+            await client.create({
+              _type: 'whatsappBroadcast',
+              name: 'حملة: ' + (selectedMetaTpl?.name || selectedTpl?.name || 'رسالة مخصصة'),
+              sentAt: new Date().toISOString(),
+              message: customMsg || (selectedMetaTpl ? "قالب: " + selectedMetaTpl.name : selectedTpl?.name || ''),
+              recipients: batchData.results.map((r: any) => ({
+                _key: Math.random().toString(36).substring(2, 15),
+                phone: r.phone,
+                name: r.name,
+                status: r.status,
+                error: r.error,
+                wamid: r.wamid
+              }))
+            });
+          } catch (e) {
+            console.error('Failed to log broadcast to Sanity:', e);
+          }
+
+          showAlert('ok', "✅ حملة ناجحة! تم إرسال " + batchData.sent + " وفشل " + batchData.failed);
+        } else {
+          showAlert('err', "❌ فشل إرسال الحملة: " + (batchData.error || 'خطأ غير معروف'));
+        }
       } else {
-        showAlert('ok', `✅ تم إرسال الرسالة بنجاح`)
-        setPhone('')
-        setPatientName('')
-        setCustomMsg('')
-        setAppointmentDate('')
-        setDoctorName('')
-        setSelectedTpl(null)
-      }
+        // Individual Send
+        let ok = 0
+        let fail = 0
+        for (const t of targets) {
+          const templateParams = {
+            patientName: t.name || patientName || 'عميلنا العزيز',
+            appointmentDate: appointmentDate,
+            doctorName: doctorName,
+            location: 'حي الأندلس، جدة',
+          }
 
-      // Refresh conversations from Sanity
-      setTimeout(() => void fetchConversations({ silent: true }), 1000)
+          const res = await fetch(waApiAbs('/api/whatsapp/send'), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              phone: t.phone,
+              message: customMsg,
+              patientName: t.name || patientName,
+              templateUsed: selectedTpl ? selectedTpl.name : 'رسالة مخصصة',
+              templateParams,
+              metaTemplate: selectedMetaTpl
+                ? {
+                    name: selectedMetaTpl.name,
+                    languageCode: selectedMetaTpl.language,
+                    bodyParameterValues:
+                      selectedMetaTpl.bodyVariableCount > 0
+                        ? [
+                            templateParams.patientName,
+                            templateParams.appointmentDate,
+                            templateParams.doctorName,
+                            templateParams.location,
+                          ].slice(0, selectedMetaTpl.bodyVariableCount)
+                        : [],
+                  }
+                : undefined,
+            }),
+          })
+          if (res.ok) {
+            const d = await parseApiResponse(res)
+            if (d.success) ok++
+            else fail++
+          } else {
+            fail++
+          }
+        }
+
+        if (fail === 0) {
+          showAlert('ok', "✅ تم الإرسال بنجاح")
+          setCustomMsg('')
+          setSelectedTpl(null)
+          setPhone('')
+          setPatientName('')
+        } else {
+          showAlert('err', "⚠️ تم الإرسال إلى " + ok + " وفشل " + fail)
+        }
+        fetchConversations({ silent: true })
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'خطأ في الاتصال'
       showAlert('err', `❌ خطأ: ${msg}`)

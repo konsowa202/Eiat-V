@@ -39,9 +39,11 @@ export async function POST(req: NextRequest) {
     const sendUrl = `${origin}/api/whatsapp/send`;
     let sent = 0;
     let failed = 0;
+    const results = [];
 
     for (let i = 0; i < targets.length; i++) {
       const c = targets[i];
+      let rowResult = { phone: c.phoneE164, name: c.name || "العميل الكريم", status: "failed", error: "", wamid: "" };
       try {
         const res = await fetch(sendUrl, {
           method: "POST",
@@ -55,6 +57,7 @@ export async function POST(req: NextRequest) {
               patientName: c.name || "العميل الكريم",
             },
             metaTemplate,
+            skipSanityLog: true, // Broadcast mode
           }),
         });
 
@@ -62,18 +65,24 @@ export async function POST(req: NextRequest) {
           const d = await res.json();
           if (d.success) {
             sent++;
+            rowResult.status = "sent";
+            rowResult.wamid = d.wamid || "";
           } else {
             console.error(`Error sending to ${c.phoneE164}:`, d.error);
             failed++;
+            rowResult.error = d.error || "Unknown Error";
           }
         } else {
           console.error(`HTTP Error sending to ${c.phoneE164}:`, res.status);
           failed++;
+          rowResult.error = `HTTP ${res.status}`;
         }
       } catch (err) {
         console.error(`Exception sending to ${c.phoneE164}:`, err);
         failed++;
+        rowResult.error = err instanceof Error ? err.message : String(err);
       }
+      results.push(rowResult);
     }
 
     return jsonCors({
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest) {
       sent,
       failed,
       processed: targets.length,
+      results,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

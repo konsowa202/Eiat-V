@@ -124,6 +124,15 @@ function normalizeWaNumber(raw: string): string {
   num = num.replace(/[^\d+]/g, "");
   if (num.startsWith("00")) num = num.slice(2);
   if (num.startsWith("+")) num = num.slice(1);
+  
+  // Saudi cases
+  if (num.startsWith("05") && num.length === 10) {
+    return "966" + num.slice(1);
+  }
+  if (num.startsWith("5") && num.length === 9) {
+    return "966" + num;
+  }
+  
   return num;
 }
 
@@ -300,6 +309,7 @@ export async function POST(req: NextRequest) {
       templateUsed?: string;
       templateParams?: Record<string, string>;
       metaTemplate?: MetaTemplateSendPayload;
+      skipSanityLog?: boolean;
     } = await req.json();
 
     if (!phone?.trim()) return jsonCors({ success: false, error: "phone missing" }, { status: 400 });
@@ -515,7 +525,10 @@ export async function POST(req: NextRequest) {
         : (patientName || "").trim() || "عميل غير معروف (V3.1)";
 
     let logPersistError = "";
-    if (!sanityWriteConfigured()) {
+    if (skipSanityLog) {
+      // Broadcast mode: Don't create individual thread logs to save document quota.
+      // The caller is responsible for logging the outcome in a whatsappBroadcast document.
+    } else if (!sanityWriteConfigured()) {
       logPersistError =
         "لم يُحفظ السجل في Sanity: SANITY_API_WRITE_TOKEN غير مضبوط على الخادم (مثلاً Vercel). أضف توكن كتابة (Editor) حتى تظهر الرسائل في الشات.";
     } else {
